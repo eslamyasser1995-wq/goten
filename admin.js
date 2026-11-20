@@ -6,6 +6,7 @@
   const A = { tab: "dash", me: null, orders: [], products: [], cats: [], banners: [], profiles: [], settings: {}, ofilter: "active", pq: "", bulk: false, known: null };
   const TABS = [["dash", "📊 الرئيسية"], ["orders", "🧾 الطلبات"], ["products", "🐟 المنتجات"], ["cats", "🗂️ الأقسام"], ["banners", "🖼️ البنرات"], ["team", "🛵 المناديب"], ["settings", "⚙️ الإعدادات"]];
   const drivers = () => A.profiles.filter((p) => p.role === "driver");
+  const ctx = () => ({ products: A.products, cats: A.cats, banners: A.banners, done: refresh });
   const pname = (id) => (A.profiles.find((p) => p.id === id) || {}).full_name || "—";
 
   // ---------- الدخول ----------
@@ -96,74 +97,14 @@
         <label class="mut" style="display:flex;flex-direction:column;align-items:center;font-size:11px"><input type="checkbox" data-stock="${p.id}" ${p.in_stock ? "checked" : ""} style="width:22px;height:22px;accent-color:var(--tq)">متوفر</label>
         <button class="btn sm ghost" data-editprod="${p.id}">✏️</button></div>`).join("")}</div>`;
   }
-  function imgPicker(cur) {
-    return `<div class="imgpick"><img id="imgPrev" src="${esc(cur || "")}" alt=""><div><input type="file" accept="image/*" id="imgFile" hidden><button type="button" class="btn tq sm" id="imgBtn">📷 اختر صورة من الجهاز</button>
-      <div class="mut" style="margin-top:6px">أو الصق رابط صورة:</div><input class="in" id="imgUrl" dir="ltr" placeholder="https://..." value="${cur && !String(cur).startsWith("data:") ? esc(cur) : ""}" style="margin-top:4px"></div></div>`;
-  }
-  function wireImgPicker(state) {
-    $("imgBtn").onclick = () => $("imgFile").click();
-    $("imgFile").onchange = async (e) => {
-      const f = e.target.files[0]; if (!f) return;
-      $("imgBtn").disabled = true; $("imgBtn").textContent = "⏳ جاري الرفع...";
-      try { state.image = await Store.uploadImage(f); $("imgPrev").src = state.image; toast("تم رفع الصورة ✓"); }
-      catch (err) { toast(err.message, "err"); } finally { $("imgBtn").disabled = false; $("imgBtn").textContent = "📷 تغيير الصورة"; }
-    };
-    $("imgUrl").oninput = (e) => { const v = e.target.value.trim(); if (v) { state.image = v; $("imgPrev").src = v; } };
-  }
-  function editProduct(id) {
-    const p = id ? { ...A.products.find((x) => x.id === id) } : { active: true, in_stock: true, featured: false, unit_ar: "كيلو", unit_en: "kg", sort: 0, category_id: (A.cats[0] || {}).id || null, image: "" };
-    const fi = (k, l, type = "text", extra = "") => `<label class="f"><span>${l}</span><input class="in" id="p_${k}" type="${type}" value="${esc(p[k] == null ? "" : p[k])}" ${extra}></label>`;
-    const sw = (k, l) => `<label class="switch"><span>${l}</span><input type="checkbox" id="p_${k}" ${p[k] ? "checked" : ""}></label>`;
-    sheet(`<h3 style="margin:0 0 10px">${id ? "تعديل منتج" : "منتج جديد"}</h3>${imgPicker(p.image)}
-      <div class="row2">${fi("name_ar", "الاسم بالعربي *")}${fi("name_en", "الاسم بالإنجليزي")}</div>
-      <label class="f"><span>القسم</span><select class="in" id="p_category_id"><option value="">بدون قسم</option>${A.cats.map((c) => `<option value="${c.id}" ${p.category_id === c.id ? "selected" : ""}>${esc(c.name_ar)}</option>`).join("")}</select></label>
-      <div class="row2">${fi("price", "السعر (د.ك) *", "number", 'step="0.005" min="0" inputmode="decimal"')}${fi("old_price", "السعر قبل الخصم", "number", 'step="0.005" min="0" inputmode="decimal"')}</div>
-      <div class="row3">${fi("unit_ar", "الوحدة")}${fi("unit_en", "Unit")}${fi("sort", "الترتيب", "number", 'inputmode="numeric"')}</div>
-      <label class="f"><span>الوصف بالعربي</span><textarea class="in" id="p_desc_ar" rows="2">${esc(p.desc_ar || "")}</textarea></label>
-      <label class="f"><span>الوصف بالإنجليزي</span><textarea class="in" id="p_desc_en" rows="2">${esc(p.desc_en || "")}</textarea></label>
-      ${sw("active", "ظاهر في التطبيق")}${sw("in_stock", "متوفر")}${sw("featured", "يظهر في العروض المميزة")}
-      <button class="btn tq block" id="pSave" style="margin-top:14px">💾 حفظ</button>${id ? '<button class="btn red block" id="pDel" style="margin-top:8px">🗑️ حذف المنتج</button>' : ""}`, () => {
-      wireImgPicker(p);
-      $("pSave").onclick = async () => {
-        const v = (k) => $("p_" + k).value.trim(), c = (k) => $("p_" + k).checked;
-        const row = { ...p, name_ar: v("name_ar"), name_en: v("name_en"), category_id: v("category_id") || null, price: num(v("price")), old_price: v("old_price") ? num(v("old_price")) : null, unit_ar: v("unit_ar"), unit_en: v("unit_en"), sort: parseInt(v("sort")) || 0, desc_ar: $("p_desc_ar").value.trim(), desc_en: $("p_desc_en").value.trim(), active: c("active"), in_stock: c("in_stock"), featured: c("featured") };
-        if (!row.name_ar || !(row.price > 0)) return toast("الاسم والسعر مطلوبين", "err");
-        try { $("pSave").disabled = true; await Store.saveProduct(row); toast("تم الحفظ ✓"); closeSheet(); await refresh(); } catch (e) { toast(e.message, "err"); $("pSave").disabled = false; }
-      };
-      if (id) $("pDel").onclick = async () => { if (!(await UI.ask("حذف المنتج نهائياً؟"))) return; try { await Store.deleteProduct(id); closeSheet(); toast("تم الحذف"); await refresh(); } catch (e) { toast(e.message, "err"); } };
-    });
-  }
-
   // ---------- الأقسام والبنرات ----------
   function cats() {
     return `<div class="h2">الأقسام <button class="btn tq sm" data-editcat="">+ قسم</button></div><div class="list">${A.cats.map((c) => `<div class="it"><img src="${esc(c.image || "")}" alt=""><div class="t"><b>${esc(c.name_ar)}</b><span class="mut">${esc(c.name_en || "")} · ${A.products.filter((p) => p.category_id === c.id).length} منتج</span>${!c.active ? '<span class="pill r">مخفي</span>' : ""}</div><button class="btn sm ghost" data-editcat="${c.id}">✏️</button></div>`).join("")}</div>`;
-  }
-  function editCat(id) {
-    const c = id ? { ...A.cats.find((x) => x.id === id) } : { active: true, sort: A.cats.length, image: "" };
-    sheet(`<h3 style="margin:0 0 10px">${id ? "تعديل قسم" : "قسم جديد"}</h3>${imgPicker(c.image)}
-      <div class="row2"><label class="f"><span>الاسم بالعربي *</span><input class="in" id="c_ar" value="${esc(c.name_ar || "")}"></label><label class="f"><span>الاسم بالإنجليزي</span><input class="in" id="c_en" value="${esc(c.name_en || "")}"></label></div>
-      <label class="f"><span>الترتيب</span><input class="in" id="c_sort" type="number" value="${c.sort || 0}"></label><label class="switch"><span>ظاهر</span><input type="checkbox" id="c_act" ${c.active ? "checked" : ""}></label>
-      <button class="btn tq block" id="cSave" style="margin-top:14px">💾 حفظ</button>${id ? '<button class="btn red block" id="cDel" style="margin-top:8px">🗑️ حذف القسم</button>' : ""}`, () => {
-      wireImgPicker(c);
-      $("cSave").onclick = async () => { const row = { ...c, name_ar: $("c_ar").value.trim(), name_en: $("c_en").value.trim(), sort: parseInt($("c_sort").value) || 0, active: $("c_act").checked }; if (!row.name_ar) return toast("اكتب اسم القسم", "err"); try { await Store.saveCategory(row); closeSheet(); toast("تم الحفظ ✓"); await refresh(); } catch (e) { toast(e.message, "err"); } };
-      if (id) $("cDel").onclick = async () => { if (!(await UI.ask("حذف القسم؟ المنتجات ستبقى بدون قسم."))) return; try { await Store.deleteCategory(id); closeSheet(); await refresh(); } catch (e) { toast(e.message, "err"); } };
-    });
   }
   function banners() {
     return `<div class="h2">البنرات الإعلانية <button class="btn tq sm" data-editban="">+ بنر</button></div><p class="mut">المقاس المثالي: عرض ضعف الارتفاع (مثلاً 1200×600).</p>
       <div class="list">${A.banners.map((b) => `<div class="it"><img src="${esc(b.image)}" alt="" style="width:110px;height:55px"><div class="t"><b>${esc(b.title || "بدون عنوان")}</b>${!b.active ? '<span class="pill r">مخفي</span>' : ""}</div><button class="btn sm ghost" data-editban="${b.id}">✏️</button></div>`).join("")}</div>`;
   }
-  function editBanner(id) {
-    const b = id ? { ...A.banners.find((x) => x.id === id) } : { active: true, sort: A.banners.length, image: "" };
-    sheet(`<h3 style="margin:0 0 10px">${id ? "تعديل بنر" : "بنر جديد"}</h3>${imgPicker(b.image)}<label class="f"><span>عنوان (اختياري)</span><input class="in" id="b_t" value="${esc(b.title || "")}"></label>
-      <label class="f"><span>الترتيب</span><input class="in" id="b_sort" type="number" value="${b.sort || 0}"></label><label class="switch"><span>ظاهر</span><input type="checkbox" id="b_act" ${b.active ? "checked" : ""}></label>
-      <button class="btn tq block" id="bSave" style="margin-top:14px">💾 حفظ</button>${id ? '<button class="btn red block" id="bDel" style="margin-top:8px">🗑️ حذف</button>' : ""}`, () => {
-      wireImgPicker(b);
-      $("bSave").onclick = async () => { if (!b.image) return toast("اختر صورة للبنر", "err"); try { await Store.saveBanner({ ...b, title: $("b_t").value.trim(), sort: parseInt($("b_sort").value) || 0, active: $("b_act").checked }); closeSheet(); toast("تم الحفظ ✓"); await refresh(); } catch (e) { toast(e.message, "err"); } };
-      if (id) $("bDel").onclick = async () => { if (!(await UI.ask("حذف البنر؟"))) return; await Store.deleteBanner(id); closeSheet(); await refresh(); };
-    });
-  }
-
   // ---------- المناديب ----------
   function team() {
     const R = { pending: "بانتظار الموافقة", driver: "مندوب", admin: "أدمن", blocked: "موقوف" };
@@ -180,6 +121,7 @@
       <div class="row3">${fi("delivery_fee", "رسوم التوصيل", "number", 'step="0.005" inputmode="decimal"')}${fi("min_order", "الحد الأدنى", "number", 'step="0.005" inputmode="decimal"')}${fi("free_delivery_over", "توصيل مجاني فوق", "number", 'step="0.005" inputmode="decimal"')}</div>
       ${fi("whatsapp", "واتساب المتجر (مثال 96550000000)", "tel")}${fi("notice_ar", "شريط تنبيه بالعربي")}${fi("notice_en", "Notice in English")}
       <button class="btn tq block" id="sSave">💾 حفظ الإعدادات</button></div>
+      <div class="card"><b>شكل التطبيق</b><p class="mut">الشعار، اسم المتجر، لون الشريط العلوي.</p><button class="btn sm" data-editheader>🎨 تعديل الشريط العلوي والشعار</button></div>
       ${Store.live ? "" : '<div class="card"><b>الوضع التجريبي</b><p class="mut">البيانات محفوظة على هذا الجهاز فقط. لربط العملاء والمناديب فعلياً فعّل Supabase (راجع الدليل).</p><button class="btn red sm" id="resetBtn">إرجاع البيانات التجريبية الأصلية</button></div>'}`;
   }
 
@@ -193,15 +135,15 @@
     const rb = $("resetBtn"); if (rb) rb.onclick = async () => { if (await UI.ask("مسح كل التعديلات والطلبات التجريبية؟")) { await Store.resetDemo(); await refresh(); toast("تم"); } };
   }
   document.addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv]"); if (!el || !A.me) return;
+    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader]"); if (!el || !A.me) return;
     const d = el.dataset;
     try {
       if (d.tab) { A.tab = d.tab; render(); scrollTo(0, 0); }
       else if (d.of) { A.ofilter = d.of; render(); }
-      else if (d.newprod !== undefined) editProduct(null);
-      else if (d.editprod) editProduct(d.editprod);
-      else if (d.editcat !== undefined) editCat(d.editcat || null);
-      else if (d.editban !== undefined) editBanner(d.editban || null);
+      else if (d.newprod !== undefined) Editors.product(null, ctx());
+      else if (d.editprod) Editors.product(d.editprod, ctx());
+      else if (d.editcat !== undefined) Editors.category(d.editcat || null, ctx());
+      else if (d.editban !== undefined) Editors.banner(d.editban || null, ctx());
       else if (d.bulk !== undefined) { A.bulk = !A.bulk; render(); }
       else if (d.bulksave !== undefined) {
         el.disabled = true; let n = 0;
@@ -212,6 +154,7 @@
         A.bulk = false; toast(`تم تحديث ${n} سعر ✓`); await refresh();
       }
       else if (d.quick) { const [id, st] = d.quick.split(":"); await Store.updateOrder(id, { status: st }); toast("تم ✓"); await refresh(); }
+      else if (d.editheader !== undefined) Editors.header(A.settings, ctx());
       else if (d.storeopen !== undefined) { await Store.saveSettings({ store_open: !A.settings.store_open }); await refresh(); }
       else if (d.adddrv !== undefined) {
         sheet(`<h3>مندوب جديد</h3><label class="f"><span>الاسم</span><input class="in" id="dn"></label><label class="f"><span>الهاتف (965xxxxxxxx)</span><input class="in" id="dp" type="tel"></label><button class="btn tq block" id="dSave">حفظ</button>`, () => {

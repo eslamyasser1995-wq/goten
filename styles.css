@@ -131,3 +131,16 @@ main{padding-bottom:calc(90px + var(--safe-b))}
 .filters button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 .login{max-width:380px;margin:40px auto;padding:0 16px}
 .demo-tag{background:#fde68a;color:#78350f;font-size:11px;font-weight:700;border-radius:6px;padding:2px 6px}
+
+/* وضع التعديل */
+.ebtn{border:0;background:#fbbf24;color:#3b2a00;font-weight:700;border-radius:999px;padding:4px 10px;font-size:12px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+.ebtn.sm{margin-top:4px;padding:2px 10px}
+.ebtn.on-card{position:absolute;top:8px;inset-inline-end:8px;z-index:3}
+.etools{display:flex;gap:6px;overflow-x:auto;margin-top:10px;scrollbar-width:none}
+.etools::-webkit-scrollbar{display:none}
+.etools button,.etools a{flex:0 0 auto;border:0;background:#fbbf24;color:#3b2a00;font-weight:700;border-radius:10px;padding:7px 11px;font-size:13px;text-decoration:none;cursor:pointer}
+.addtile{border:2px dashed var(--tq);background:#effcfc;color:var(--tq2);border-radius:var(--r);font-weight:800;font-size:15px;min-height:180px;cursor:pointer;line-height:1.8}
+.addtile.ban{flex:0 0 60%;min-height:0;aspect-ratio:2/1}
+.bwrap{flex:0 0 88%;position:relative;scroll-snap-align:center}
+.bwrap img{width:100%;aspect-ratio:2/1;object-fit:cover;border-radius:var(--r)}
+.addcircle{width:66px;height:66px;margin:0 auto 6px;border-radius:50%;border:2px dashed var(--tq);display:flex!important;align-items:center;justify-content:center;font-size:22px;background:#effcfc}

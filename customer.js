@@ -5,7 +5,7 @@
     ar: { tag: "أسماك ومأكولات بحرية طازجة", search: "ابحث عن سمك، روبيان...", cats: "الأقسام", all: "الكل", offers: "عروض مميزة", products: "المنتجات", add: "أضف", out: "نفدت الكمية", home: "الرئيسية", cart: "السلة", orders: "طلباتي", viewCart: "عرض السلة", emptyCart: "سلتك فاضية", startShop: "ابدأ التسوق", subtotal: "المجموع", delivery: "التوصيل", free: "مجاني", total: "الإجمالي", checkout: "إتمام الطلب", minOrder: "الحد الأدنى للطلب", freeOver: "توصيل مجاني للطلبات فوق", name: "الاسم", phone: "رقم الهاتف", area: "المنطقة", chooseArea: "اختر المنطقة", block: "قطعة", street: "شارع", avenue: "جادة", house: "منزل / مبنى", floor: "الدور / الشقة", notes: "ملاحظات (تنظيف، تقطيع...)", slot: "وقت التوصيل", asap: "بأسرع وقت", pay: "طريقة الدفع", cash: "كاش عند الاستلام", knet: "كي نت عند الاستلام (جهاز المندوب)", place: "تأكيد الطلب", placed: "تم استلام طلبك!", orderNo: "رقم الطلب", track: "تتبع الطلب", noOrders: "ما عندك طلبات لسه", closed: "المتجر مغلق حالياً", driver: "المندوب", call: "اتصال", items: "المنتجات", back: "رجوع", required: "عبّي الحقول المطلوبة", phoneBad: "رقم الهاتف لازم 8 أرقام", lang: "English", addr: "عنوان التوصيل", whats: "واتساب", qty: "الكمية", today: "اليوم", tomorrow: "بكرة", noRes: "ما في نتائج", errs: { STORE_CLOSED: "المتجر مغلق حالياً", PRODUCT_UNAVAILABLE: "منتج في سلتك لم يعد متوفراً", MIN_ORDER: "الطلب أقل من الحد الأدنى", EMPTY: "السلة فاضية" } },
     en: { tag: "Fresh fish & seafood", search: "Search fish, shrimp...", cats: "Categories", all: "All", offers: "Special offers", products: "Products", add: "Add", out: "Out of stock", home: "Home", cart: "Cart", orders: "Orders", viewCart: "View cart", emptyCart: "Your cart is empty", startShop: "Start shopping", subtotal: "Subtotal", delivery: "Delivery", free: "Free", total: "Total", checkout: "Checkout", minOrder: "Minimum order", freeOver: "Free delivery over", name: "Name", phone: "Phone", area: "Area", chooseArea: "Choose area", block: "Block", street: "Street", avenue: "Avenue", house: "House / Building", floor: "Floor / Apt", notes: "Notes (cleaning, cutting...)", slot: "Delivery time", asap: "As soon as possible", pay: "Payment", cash: "Cash on delivery", knet: "KNET on delivery (driver's machine)", place: "Place order", placed: "Order received!", orderNo: "Order no.", track: "Track order", noOrders: "No orders yet", closed: "Store is closed now", driver: "Driver", call: "Call", items: "Items", back: "Back", required: "Please fill the required fields", phoneBad: "Phone must be 8 digits", lang: "عربي", addr: "Delivery address", whats: "WhatsApp", qty: "Qty", today: "Today", tomorrow: "Tomorrow", noRes: "No results", errs: { STORE_CLOSED: "Store is closed now", PRODUCT_UNAVAILABLE: "An item in your cart is no longer available", MIN_ORDER: "Order is below the minimum", EMPTY: "Cart is empty" } }
   };
-  const S = { lang: ls.get("ik_lang", "ar"), cart: ls.get("ik_cart", {}), my: ls.get("ik_orders", []), addr: ls.get("ik_addr", {}), view: "home", cat: null, q: "", products: [], cats: [], banners: [], settings: {} };
+  const S = { lang: ls.get("ik_lang", "ar"), cart: ls.get("ik_cart", {}), my: ls.get("ik_orders", []), addr: ls.get("ik_addr", {}), view: "home", edit: false, all: { p: [], c: [], b: [] }, cat: null, q: "", products: [], cats: [], banners: [], settings: {} };
   const t = (k) => T[S.lang][k];
   const nm = (o, f = "name") => (S.lang === "en" && o[f + "_en"]) || o[f + "_ar"] || "";
   const $ = (id) => document.getElementById(id);
@@ -15,7 +15,7 @@
 
   async function load() {
     const [p, c, b, s] = await Promise.all([Store.products(), Store.categories(), Store.banners(), Store.settings()]);
-    S.products = p.filter((x) => x.active); S.cats = c.filter((x) => x.active); S.banners = b.filter((x) => x.active); S.settings = s || {};
+    S.all = { p, c, b }; S.products = S.edit ? p : p.filter((x) => x.active); S.cats = S.edit ? c : c.filter((x) => x.active); S.banners = S.edit ? b : b.filter((x) => x.active); S.settings = s || {};
     // تنظيف السلة من منتجات محذوفة
     Object.keys(S.cart).forEach((id) => { if (!S.products.find((p) => p.id === id)) delete S.cart[id]; }); saveCart();
   }
@@ -31,7 +31,10 @@
 
   // ---------- العرض ----------
   function header() {
-    return `<header class="top"><div class="wrap"><div class="row"><div class="brand">${LOGO}<div>إسلامكو ISLAMKO<small>${t("tag")}</small></div></div><div class="sp"></div><button class="chip-btn" data-lang>${t("lang")}</button></div>
+    const s = S.settings, logo = s.logo ? `<img src="${esc(s.logo)}" alt="" style="width:38px;height:38px;border-radius:50%;object-fit:cover">` : LOGO;
+    const tag = (S.lang === "en" ? s.tagline_en : s.tagline_ar) || t("tag");
+    return `<header class="top" style="${s.header_color ? "background:" + esc(s.header_color) : ""}"><div class="wrap"><div class="row"><div class="brand">${logo}<div>${esc(s.store_name || "إسلامكو ISLAMKO")}<small>${esc(tag)}</small></div></div>${S.edit ? '<button class="ebtn" data-ed="header" title="تعديل">✏️</button>' : ""}<div class="sp"></div>${S.canEdit ? `<button class="chip-btn" data-editmode>${S.edit ? "✅ تم" : "⚙️ تحكم"}</button>` : ""}<button class="chip-btn" data-lang>${t("lang")}</button></div>
+      ${S.edit ? `<div class="etools"><button data-ed="newprod">➕ منتج</button><button data-ed="newcat">🗂️ قسم</button><button data-ed="newban">🖼️ بنر</button><button data-ed="header">🎨 الشريط العلوي</button><a href="admin.html" target="_blank" rel="noopener">📊 لوحة التحكم</a><a href="driver.html" target="_blank" rel="noopener">🛵 المناديب</a></div>` : ""}
       ${S.view === "home" ? `<div class="search">🔍<input id="q" placeholder="${t("search")}" value="${esc(S.q)}" autocomplete="off"></div>` : ""}</div></header>`;
   }
   function qtyCtl(p) {
@@ -41,7 +44,7 @@
   }
   function pcard(p) {
     const off = p.old_price && p.old_price > p.price ? Math.round((1 - p.price / p.old_price) * 100) : 0;
-    return `<div class="pcard">${off ? `<span class="badge">-${off}%</span>` : ""}${!p.in_stock ? `<span class="badge off">${t("out")}</span>` : ""}
+    return `<div class="pcard">${S.edit ? `<button class="ebtn on-card" data-ed="prod:${p.id}">✏️ تعديل</button>${!p.active ? '<span class="badge off" style="top:40px">مخفي</span>' : ""}` : ""}${off ? `<span class="badge">-${off}%</span>` : ""}${!p.in_stock ? `<span class="badge off">${t("out")}</span>` : ""}
       <img src="${esc(p.image)}" alt="" loading="lazy" data-open="${p.id}"><div class="b"><div class="n" data-open="${p.id}">${esc(nm(p))}</div>
       <div><span class="price">${money(p.price, S.lang)}</span>${off ? `<span class="old">${money(p.old_price, S.lang)}</span>` : ""}</div>
       <div class="u">/ ${esc(nm(p, "unit") || "")}</div><div class="act">${qtyCtl(p)}</div></div></div>`;
@@ -55,13 +58,13 @@
     const notice = S.lang === "en" ? s.notice_en : s.notice_ar;
     return `<div class="wrap">
       ${!s.store_open ? `<div class="notice">⛔ ${t("closed")}</div>` : ""}${notice ? `<div class="notice">📢 ${esc(notice)}</div>` : ""}
-      ${!q && S.banners.length ? `<div class="banners">${S.banners.map((b) => `<img src="${esc(b.image)}" alt="${esc(b.title || "")}">`).join("")}</div>` : ""}
+      ${!q && (S.banners.length || S.edit) ? `<div class="banners">${S.banners.map((b) => S.edit ? `<div class="bwrap"><img src="${esc(b.image)}" alt=""><button class="ebtn on-card" data-ed="ban:${b.id}">✏️ تعديل البنر</button></div>` : `<img src="${esc(b.image)}" alt="${esc(b.title || "")}">`).join("")}${S.edit ? '<button class="addtile ban" data-ed="newban">➕<br>إضافة بنر</button>' : ""}</div>` : ""}
       <div class="h2">${t("cats")}</div>
       <div class="cats"><button class="cat ${!S.cat ? "on" : ""}" data-cat=""><img src="${esc((S.cats[0] || {}).image || "")}" alt=""><span>${t("all")}</span></button>
-        ${S.cats.map((c) => `<button class="cat ${S.cat === c.id ? "on" : ""}" data-cat="${c.id}"><img src="${esc(c.image)}" alt=""><span>${esc(nm(c))}</span></button>`).join("")}</div>
+        ${S.cats.map((c) => `<div style="flex:0 0 auto;text-align:center"><button class="cat ${S.cat === c.id ? "on" : ""}" data-cat="${c.id}"><img src="${esc(c.image)}" alt=""><span>${esc(nm(c))}</span></button>${S.edit ? `<button class="ebtn sm" data-ed="cat:${c.id}">✏️</button>` : ""}</div>`).join("")}${S.edit ? '<button class="cat" data-ed="newcat"><span class="addcircle">➕</span><span>قسم جديد</span></button>' : ""}</div>
       ${!S.cat && !q && feat.length ? `<div class="h2">🔥 ${t("offers")}</div><div class="grid">${feat.map(pcard).join("")}</div>` : ""}
       <div class="h2">${S.cat ? esc(nm(S.cats.find((c) => c.id === S.cat) || {})) : t("products")}</div>
-      ${list.length ? `<div class="grid">${list.map(pcard).join("")}</div>` : `<div class="empty"><div class="e">🔎</div>${t("noRes")}</div>`}
+      ${list.length || S.edit ? `<div class="grid">${S.edit ? '<button class="addtile" data-ed="newprod">➕<br>إضافة منتج</button>' : ""}${list.map(pcard).join("")}</div>` : `<div class="empty"><div class="e">🔎</div>${t("noRes")}</div>`}
       <p class="mut" style="text-align:center;margin-top:24px">${s.free_delivery_over ? `🚚 ${t("freeOver")} ${money(s.free_delivery_over, S.lang)} · ` : ""}${t("minOrder")} ${money(s.min_order, S.lang)}</p>
     </div>`;
   }
@@ -164,6 +167,8 @@
   }
 
   document.addEventListener("click", (e) => {
+    const ed = e.target.closest("[data-ed],[data-editmode]");
+    if (ed) { e.stopPropagation(); return onEdit(ed); }
     const el = e.target.closest("[data-inc],[data-dec],[data-view],[data-cat],[data-open],[data-lang],[data-track],[data-track2]"); if (!el) return;
     const d = el.dataset;
     if (d.inc) { setQty(d.inc, (S.cart[d.inc] || 0) + 1); refreshSheetQty(d.inc); }
@@ -175,11 +180,37 @@
     else if (d.track) openTrack(d.track);
     else if (d.track2) openTrack(d.track2);
   });
+  // ---------- وضع التعديل ----------
+  const ctx = () => ({ products: S.all.p, cats: S.all.c, banners: S.all.b, done: async () => { await load(); render(); } });
+  async function onEdit(el) {
+    if (el.hasAttribute("data-editmode")) {
+      if (S.edit) { S.edit = false; try { sessionStorage.removeItem("ik_edit"); } catch (e) {} await load(); return render(); }
+      if (Store.live) return enterEdit();
+      return sheet(`<h3>⚙️ دخول وضع التحكم</h3><label class="f"><span>رقم الدخول (PIN)</span><input class="in" id="epin" type="password" inputmode="numeric" placeholder="1234"></label><button class="btn tq block" id="epinBtn">دخول</button><p class="mut">الرقم الافتراضي 1234 – تغيّره من ملف config.js</p>`, () => {
+        $("epinBtn").onclick = () => { if ($("epin").value === String((window.ISLAMKO_CONFIG || {}).DEMO_ADMIN_PIN || "1234")) { Store.demoLogin({ id: "admin", role: "admin", full_name: "المدير" }); closeSheet(); enterEdit(); } else toast("PIN غير صحيح", "err"); };
+      });
+    }
+    const v = el.dataset.ed, [k, id] = v.split(":");
+    if (k === "newprod") Editors.product(null, ctx());
+    else if (k === "prod") Editors.product(id, ctx());
+    else if (k === "newcat") Editors.category(null, ctx());
+    else if (k === "cat") Editors.category(id, ctx());
+    else if (k === "newban") Editors.banner(null, ctx());
+    else if (k === "ban") Editors.banner(id, ctx());
+    else if (k === "header") Editors.header(S.settings, ctx());
+  }
+  async function enterEdit() { S.edit = true; try { sessionStorage.setItem("ik_edit", "1"); } catch (e) {} S.view = "home"; await load(); render(); toast("وضع التعديل مفعّل – اضغط ✏️ على أي عنصر"); }
+  async function checkEditRights() {
+    if (!Store.live) { S.canEdit = true; } else { try { const me = await Store.me(); S.canEdit = !!(me && me.role === "admin"); } catch (e) { S.canEdit = false; } }
+    let was = false; try { was = sessionStorage.getItem("ik_edit") === "1"; } catch (e) {}
+    if (S.canEdit && was) { const me = await Store.me(); if (me && me.role === "admin") S.edit = true; }
+  }
+
   function refreshSheetQty(id) { const sq = document.getElementById("sq"); if (sq) { const p = S.products.find((x) => x.id === id); if (p) sq.innerHTML = qtyCtl(p); } }
 
   (async function start() {
     document.documentElement.dir = S.lang === "ar" ? "rtl" : "ltr"; document.documentElement.lang = S.lang;
-    try { await Store.init(); await load(); render(); } catch (e) { $("app").innerHTML = `<div class="empty"><div class="e">⚠️</div>${esc(e.message)}</div>`; return; }
+    try { await Store.init(); await checkEditRights(); await load(); render(); } catch (e) { $("app").innerHTML = `<div class="empty"><div class="e">⚠️</div>${esc(e.message)}</div>`; return; }
     Store.onChange(async () => { if (S.view === "checkout" || document.getElementById("sheet")) return; try { await load(); render(); } catch (e) {} });
     if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
   })();

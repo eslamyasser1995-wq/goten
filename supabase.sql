@@ -54,6 +54,11 @@ create table if not exists public.settings (
   whatsapp text, notice_ar text, notice_en text
 );
 insert into public.settings (id) values (1) on conflict do nothing;
+alter table public.settings add column if not exists store_name text;
+alter table public.settings add column if not exists tagline_ar text;
+alter table public.settings add column if not exists tagline_en text;
+alter table public.settings add column if not exists logo text;
+alter table public.settings add column if not exists header_color text;
 
 -- 3) الطلبات
 create table if not exists public.orders (
