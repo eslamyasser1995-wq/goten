@@ -26,7 +26,7 @@
 
 ## المرحلة 3: قاعدة البيانات الحقيقية Supabase (مجاني)
 1. ادخل supabase.com › Start your project › سجّل بحساب GitHub.
-2. **New project** › اسم `islamko` › كلمة سر قوية › Region: أقرب منطقة (مثلاً Frankfurt أو Mumbai).
+2. **New project** › اسم `goten` › كلمة سر قوية › Region: أقرب منطقة (مثلاً Frankfurt أو Mumbai).
 3. **SQL Editor › New query** › الصق محتوى ملف `supabase.sql` كامل › **Run**.
 4. **Authentication › Sign In / Providers › Email**: اقفل خيار **Confirm email** (عشان الحسابات تشتغل فوراً) – أو خليه وأكّد الإيميل من بريدك.
 5. **Project Settings › API**: انسخ `Project URL` و `anon public key`.
