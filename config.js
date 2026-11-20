@@ -1,7 +1,7 @@
-// ===== إعدادات goten =====
+// ===== إعدادات اسلامكو =====
 // اتركها فاضية = وضع تجريبي (البيانات تتحفظ على نفس الجهاز فقط).
 // ضع بيانات Supabase = النظام الحقيقي (العملاء والمناديب والأدمن على نفس قاعدة البيانات).
-window.goten_CONFIG = {
+window.ISLAMKO_CONFIG = {
   SUPABASE_URL: "https://aefbvmjorsohzfhbgeds.supabase.co",
   SUPABASE_ANON_KEY: "sb_publishable_CzgMrbcOtttRVQkjVzHRjw_x4YHgtdY",
   DEMO_ADMIN_PIN: "1234",  // رقم دخول لوحة التحكم في الوضع التجريبي فقط
