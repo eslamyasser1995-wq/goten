@@ -187,7 +187,7 @@
       if (S.edit) { S.edit = false; try { sessionStorage.removeItem("ik_edit"); } catch (e) {} await load(); return render(); }
       if (Store.live) return enterEdit();
       return sheet(`<h3>⚙️ دخول وضع التحكم</h3><label class="f"><span>رقم الدخول (PIN)</span><input class="in" id="epin" type="password" inputmode="numeric" placeholder="1234"></label><button class="btn tq block" id="epinBtn">دخول</button><p class="mut">الرقم الافتراضي 1234 – تغيّره من ملف config.js</p>`, () => {
-        $("epinBtn").onclick = () => { if ($("epin").value === String((window.Goten_CONFIG || {}).DEMO_ADMIN_PIN || "1234")) { Store.demoLogin({ id: "admin", role: "admin", full_name: "المدير" }); closeSheet(); enterEdit(); } else toast("PIN غير صحيح", "err"); };
+        $("epinBtn").onclick = () => { if ($("epin").value === String((window.ISLAMKO_CONFIG || {}).DEMO_ADMIN_PIN || "1234")) { Store.demoLogin({ id: "admin", role: "admin", full_name: "المدير" }); closeSheet(); enterEdit(); } else toast("PIN غير صحيح", "err"); };
       });
     }
     const v = el.dataset.ed, [k, id] = v.split(":");

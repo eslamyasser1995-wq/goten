@@ -1,6 +1,10 @@
 // طبقة البيانات: وضع تجريبي (localStorage) أو حقيقي (Supabase)
 (function () {
-  const C = window.Goten_CONFIG || {};
+  // بيانات Supabase مدمجة هنا كمان، عشان المتجر يفضل على النسخة الحقيقية حتى لو config.js اتمسح أو باظ
+  const DEFAULT_URL = "https://aefbvmjorsohzfhbgeds.supabase.co";
+  const DEFAULT_KEY = "sb_publishable_CzgMrbcOtttRVQkjVzHRjw_x4YHgtdY";
+  const CFG = window.ISLAMKO_CONFIG || {};
+  const C = { ...CFG, SUPABASE_URL: CFG.SUPABASE_URL || DEFAULT_URL, SUPABASE_ANON_KEY: CFG.SUPABASE_ANON_KEY || DEFAULT_KEY };
   const LIVE = !!(C.SUPABASE_URL && C.SUPABASE_ANON_KEY);
   const KEY = "islamko_demo_v1";
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));

@@ -154,6 +154,13 @@ drop policy if exists "islamko read images" on storage.objects;   create policy 
 drop policy if exists "islamko upload images" on storage.objects; create policy "islamko upload images" on storage.objects for insert with check (bucket_id = 'images' and public.my_role() = 'admin');
 drop policy if exists "islamko delete images" on storage.objects; create policy "islamko delete images" on storage.objects for delete using (bucket_id = 'images' and public.my_role() = 'admin');
 
+
+-- 9) صلاحيات الوصول للجداول (مطلوبة في مشاريع Supabase الجديدة)
+grant usage on schema public to anon, authenticated;
+grant select on all tables in schema public to anon, authenticated;
+grant insert, update, delete on all tables in schema public to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+
 -- ===================================================================
 -- بعد ما تسجّل حسابك من صفحة admin.html، شغّل السطر ده (غيّر الإيميل):
 -- update public.profiles set role = 'admin' where id = (select id from auth.users where email = 'you@example.com');

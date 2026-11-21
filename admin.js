@@ -1,7 +1,7 @@
 // لوحة تحكم Goten
 (function () {
   const { esc, money, toast, sheet, closeSheet, STATUS, fmtDate, LOGO, num } = UI;
-  const C = window.Goten_CONFIG || {};
+  const C = window.ISLAMKO_CONFIG || {};
   const $ = (id) => document.getElementById(id);
   const A = { tab: "dash", me: null, orders: [], products: [], cats: [], banners: [], profiles: [], settings: {}, ofilter: "active", pq: "", bulk: false, known: null };
   const TABS = [["dash", "📊 الرئيسية"], ["orders", "🧾 الطلبات"], ["products", "🐟 المنتجات"], ["cats", "🗂️ الأقسام"], ["banners", "🖼️ البنرات"], ["team", "🛵 المناديب"], ["settings", "⚙️ الإعدادات"]];
