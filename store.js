@@ -189,6 +189,19 @@
       if (LIVE) return chk(await sb.from("customers").delete().eq("phone", phone));
       const d = db(); d.customers = (d.customers || []).filter((x) => x.phone !== phone); persist();
     },
+    // الحسابات
+    async transactions() {
+      if (LIVE) { const r = await sb.from("transactions").select("*").order("date", { ascending: false }).limit(2000); if (r.error) { console.warn(r.error.message); return []; } return r.data; }
+      return db().transactions || [];
+    },
+    async saveTransaction(t) {
+      if (LIVE) return chk(await sb.from("transactions").insert(t));
+      const d = db(); d.transactions = d.transactions || []; d.transactions.unshift({ ...t, id: uid(), created_at: nowISO() }); persist();
+    },
+    async deleteTransaction(id) {
+      if (LIVE) return chk(await sb.from("transactions").delete().eq("id", id));
+      const d = db(); d.transactions = (d.transactions || []).filter((x) => x.id !== id); persist();
+    },
     async resetDemo() { if (!LIVE) { mem = seed(); persist(); } }
   };
   window.Store = Store;

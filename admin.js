@@ -3,8 +3,8 @@
   const { esc, money, toast, sheet, closeSheet, STATUS, fmtDate, LOGO, num } = UI;
   const C = window.ISLAMKO_CONFIG || {};
   const $ = (id) => document.getElementById(id);
-  const A = { cq: "", cOnlyOpt: true, tab: "dash", me: null, orders: [], products: [], cats: [], banners: [], profiles: [], settings: {}, ofilter: "active", pq: "", bulk: false, known: null };
-  const TABS = [["dash", "📊 الرئيسية"], ["orders", "🧾 الطلبات"], ["products", "🐟 المنتجات"], ["cats", "🗂️ الأقسام"], ["banners", "🖼️ البنرات"], ["customers", "👥 الزباين"], ["team", "🛵 المناديب"], ["settings", "⚙️ الإعدادات"]];
+  const A = { tx: [], period: "month", cq: "", cOnlyOpt: true, tab: "dash", me: null, orders: [], products: [], cats: [], banners: [], profiles: [], settings: {}, ofilter: "active", pq: "", bulk: false, known: null };
+  const TABS = [["dash", "📊 الرئيسية"], ["orders", "🧾 الطلبات"], ["accounts", "💰 الحسابات"], ["products", "🐟 المنتجات"], ["cats", "🗂️ الأقسام"], ["banners", "🖼️ البنرات"], ["customers", "👥 الزباين"], ["team", "🛵 المناديب"], ["settings", "⚙️ الإعدادات"]];
   const drivers = () => A.profiles.filter((p) => p.role === "driver");
   const ctx = () => ({ products: A.products, cats: A.cats, banners: A.banners, done: refresh });
   const pname = (id) => (A.profiles.find((p) => p.id === id) || {}).full_name || "—";
@@ -26,8 +26,8 @@
   }
 
   async function loadAll() {
-    const [o, p, c, b, pr, s, ic] = await Promise.all([Store.orders(), Store.products(), Store.categories(), Store.banners(), Store.profiles(), Store.settings(), Store.importedCustomers().catch(() => [])]);
-    Object.assign(A, { orders: o, products: p, cats: c, banners: b, profiles: pr, settings: s || {}, imported: ic || [] });
+    const [o, p, c, b, pr, s, ic, tx] = await Promise.all([Store.orders(), Store.products(), Store.categories(), Store.banners(), Store.profiles(), Store.settings(), Store.importedCustomers().catch(() => []), Store.transactions().catch(() => [])]);
+    Object.assign(A, { orders: o, products: p, cats: c, banners: b, profiles: pr, settings: s || {}, imported: ic || [], tx: tx || [] });
     const ids = new Set(o.map((x) => x.id));
     if (A.known) { const fresh = o.filter((x) => !A.known.has(x.id)); if (fresh.length) { beep(); toast(`🔔 طلب جديد #${fresh[0].order_no}`); } }
     A.known = ids;
@@ -36,7 +36,7 @@
 
   // ---------- الواجهة ----------
   function render() {
-    const body = { dash, orders, products, cats, banners, customers, team, settings }[A.tab]();
+    const body = { dash, orders, accounts, products, cats, banners, customers, team, settings }[A.tab]();
     $("app").innerHTML = `<header class="top"><div class="wrap wide"><div class="row"><div class="brand">${LOGO}<div>لوحة التحكم<small>${esc(A.me.full_name || A.me.email || "")} ${Store.live ? "" : '· <span class="demo-tag">تجريبي</span>'}</small></div></div><div class="sp"></div>
       <button class="chip-btn" id="pushBtn">${UI.pushState() === "granted" ? "🔔" : "🔕 فعّل"}</button><a class="chip-btn" href="index.html" target="_blank" style="text-decoration:none">👁️</a><button class="chip-btn" id="outBtn">خروج</button></div>
       <div class="tabs">${TABS.map(([k, l]) => `<button class="${A.tab === k ? "on" : ""}" data-tab="${k}">${l}${k === "orders" && newCount() ? ` (${newCount()})` : ""}</button>`).join("")}</div></div></header>
@@ -64,12 +64,13 @@
   function orderCard(o) {
     const s = STATUS[o.status] || STATUS.new;
     return `<div class="ord" style="border-color:${s.c}"><div class="hd"><b>#${o.order_no} · ${esc(o.customer_name)}</b><span class="st" style="background:${s.c}">${s.ar}</span></div>
-      <div class="mut">${fmtDate(o.created_at)} · ${esc(o.slot || "")} · ${o.payment === "cash" ? "💵 كاش" : "💳 كي نت عند الاستلام"}</div>
+      <div class="mut">${fmtDate(o.created_at)} · ${esc(o.slot || "")} · ${PAY[o.payment] || PAY.cash}</div>
       <div style="margin-top:6px">📍 ${esc(o.area)} – ق${esc(o.block)} – ش${esc(o.street)}${o.avenue ? " – ج" + esc(o.avenue) : ""} – م${esc(o.house)}${o.floor_apt ? " – " + esc(o.floor_apt) : ""}</div>
       <div style="margin-top:6px">${(o.items || []).map((i) => `${esc(i.name_ar)} ×${i.qty}`).join("، ")}</div>
       ${o.notes ? `<div class="notice">📝 ${esc(o.notes)}</div>` : ""}
       <div class="line total" style="font-size:15px"><span>الإجمالي (شامل التوصيل ${money(o.delivery_fee)})</span><span>${money(o.total)}</span></div>
       <div class="row2" style="margin-top:6px"><select class="in" data-ostatus="${o.id}">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${o.status === k ? "selected" : ""}>${v.ar}</option>`).join("")}</select>
+        <select class="in" data-opay="${o.id}">${Object.entries(PAY).map(([k, v]) => `<option value="${k}" ${(o.payment || "cash") === k ? "selected" : ""}>${v}</option>`).join("")}</select>
         <select class="in" data-odriver="${o.id}"><option value="">🛵 بدون مندوب</option>${drivers().map((d) => `<option value="${d.id}" ${o.driver_id === d.id ? "selected" : ""}>${esc(d.full_name)}</option>`).join("")}</select></div>
       <div class="acts"><a class="btn sm ghost" href="tel:+${esc(o.phone)}">📞 اتصال</a><a class="btn sm ghost" target="_blank" rel="noopener" href="https://wa.me/${esc(o.phone)}">💬 واتساب</a><a class="btn sm ghost" target="_blank" rel="noopener" href="${mapLink(o)}">🗺️ الخريطة</a>
         ${o.status === "new" ? `<button class="btn sm green" data-quick="${o.id}:confirmed">✓ تأكيد</button>` : ""}${o.driver_id ? `<span class="pill">المندوب: ${esc(pname(o.driver_id))}</span>` : ""}</div></div>`;
@@ -106,6 +107,93 @@
     return `<div class="h2">البنرات الإعلانية <button class="btn tq sm" data-editban="">+ بنر</button></div><p class="mut">المقاس المثالي: عرض ضعف الارتفاع (مثلاً 1200×600).</p>
       <div class="list">${A.banners.map((b) => `<div class="it"><img src="${esc(b.image)}" alt="" style="width:110px;height:55px"><div class="t"><b>${esc(b.title || "بدون عنوان")}</b>${!b.active ? '<span class="pill r">مخفي</span>' : ""}</div><button class="btn sm ghost" data-editban="${b.id}">✏️</button></div>`).join("")}</div>`;
   }
+  // ---------- الحسابات ----------
+  const PAY = { cash: "💵 كاش", knet_on_delivery: "💳 كي نت", credit: "📝 آجل" };
+  const KINDS = { purchase: "🛒 مشتريات", expense: "💸 مصروف", income: "💰 إيراد آخر", driver_settle: "🛵 استلام من مندوب", receivable: "📝 آجل يدوي", receivable_paid: "✅ سداد آجل" };
+  const EXP_CATS = ["بنزين ومواصلات", "رواتب", "إيجار", "كهرباء وماء", "تغليف وثلج", "صيانة", "إعلانات", "أخرى"];
+  const PERIODS = [["today", "اليوم"], ["week", "الأسبوع"], ["month", "الشهر"], ["lastmonth", "الشهر اللي فات"], ["all", "الكل"]];
+  const dayKey = (d) => { const x = new Date(d); return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0"); };
+  function inPeriod(d) {
+    if (A.period === "all") return true;
+    const x = new Date(d), n = new Date();
+    if (A.period === "today") return x.toDateString() === n.toDateString();
+    if (A.period === "week") return n - x <= 7 * 864e5 && x <= n;
+    if (A.period === "month") return x.getMonth() === n.getMonth() && x.getFullYear() === n.getFullYear();
+    if (A.period === "lastmonth") { const l = new Date(n.getFullYear(), n.getMonth() - 1, 1); return x.getMonth() === l.getMonth() && x.getFullYear() === l.getFullYear(); }
+    return true;
+  }
+  const sum = (arr, f) => arr.reduce((s, x) => s + num(f ? f(x) : x.amount), 0);
+  function driverCash() {
+    return drivers().map((d) => {
+      const got = sum(A.orders.filter((o) => o.driver_id === d.id && o.status === "delivered" && (o.payment || "cash") === "cash"), (o) => o.total);
+      const paid = sum(A.tx.filter((t) => t.kind === "driver_settle" && t.party === d.id));
+      return { d, got, paid, bal: got - paid };
+    });
+  }
+  function receivables() {
+    const m = new Map();
+    const add = (phone, name, v) => { const r = m.get(phone) || { phone, name, bal: 0 }; r.bal += v; if (name) r.name = name; m.set(phone, r); };
+    A.orders.filter((o) => o.payment === "credit" && o.status !== "cancelled").forEach((o) => add(o.phone, o.customer_name, num(o.total)));
+    A.tx.filter((t) => t.kind === "receivable").forEach((t) => add(t.party, t.party_name, num(t.amount)));
+    A.tx.filter((t) => t.kind === "receivable_paid").forEach((t) => add(t.party, t.party_name, -num(t.amount)));
+    return [...m.values()].filter((r) => Math.abs(r.bal) > 0.0005).sort((a, b) => b.bal - a.bal);
+  }
+  function accounts() {
+    const ords = A.orders.filter((o) => o.status === "delivered" && inPeriod(o.created_at));
+    const pending = A.orders.filter((o) => !["delivered", "cancelled"].includes(o.status) && inPeriod(o.created_at));
+    const tx = A.tx.filter((t) => inPeriod(t.date || t.created_at));
+    const sales = sum(ords, (o) => o.total), fees = sum(ords, (o) => o.delivery_fee);
+    const purch = sum(tx.filter((t) => t.kind === "purchase")), exp = sum(tx.filter((t) => t.kind === "expense")), inc = sum(tx.filter((t) => t.kind === "income"));
+    const profit = sales + inc - purch - exp;
+    const byPay = Object.keys(PAY).map((k) => [k, sum(ords.filter((o) => (o.payment || "cash") === k), (o) => o.total)]);
+    const byCat = {}; tx.filter((t) => t.kind === "expense").forEach((t) => { byCat[t.category || "أخرى"] = (byCat[t.category || "أخرى"] || 0) + num(t.amount); });
+    const dc = driverCash(), rc = receivables();
+    const stat = (l, v, c) => `<div class="stat"><span class="mut">${l}</span><b style="${c ? "color:" + c : ""}">${v}</b></div>`;
+    return `<div class="filters">${PERIODS.map(([k, l]) => `<button class="${A.period === k ? "on" : ""}" data-period="${k}">${l}</button>`).join("")}</div>
+      <div class="stats">${stat("المبيعات (" + ords.length + " طلب)", money(sales))}${stat("المشتريات", money(purch), "#b45309")}${stat("المصاريف", money(exp), "#dc2626")}${stat("صافي الربح", money(profit), profit >= 0 ? "#16a34a" : "#dc2626")}</div>
+      <div class="card"><div class="line"><span>منها رسوم توصيل</span><b>${money(fees)}</b></div>${inc ? `<div class="line"><span>إيرادات أخرى</span><b>${money(inc)}</b></div>` : ""}
+        ${byPay.map(([k, v]) => `<div class="line"><span>${PAY[k]}</span><b>${money(v)}</b></div>`).join("")}
+        ${pending.length ? `<div class="line mut"><span>طلبات لسه ماتوصّلتش (${pending.length})</span><span>${money(sum(pending, (o) => o.total))}</span></div>` : ""}
+        ${Object.keys(byCat).length ? `<div class="mut" style="margin-top:8px"><b>المصاريف حسب النوع:</b></div>${Object.entries(byCat).map(([k, v]) => `<div class="line"><span>${esc(k)}</span><span>${money(v)}</span></div>`).join("")}` : ""}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn tq sm" data-addtx="purchase">🛒 + مشتريات</button><button class="btn sm red" data-addtx="expense">💸 + مصروف</button><button class="btn sm green" data-addtx="income">💰 + إيراد</button><button class="btn ghost sm" data-export>📊 تصدير Excel</button></div>
+      <div class="h2">🛵 كاش مع المناديب</div>
+      ${dc.length ? dc.map((r) => `<div class="it" style="background:#fff;border-radius:14px;padding:10px;margin:8px 0;display:flex;align-items:center;gap:10px"><div class="t" style="flex:1"><b>${esc(r.d.full_name || "مندوب")}</b><div class="mut">حصّل ${money(r.got)} · سلّم ${money(r.paid)}</div></div><b style="color:${r.bal > 0 ? "#b45309" : "#16a34a"}">${money(r.bal)}</b>${r.bal > 0.0005 ? `<button class="btn sm green" data-settle="${r.d.id}">✅ استلمت</button>` : ""}</div>`).join("") : '<p class="mut">مفيش مناديب.</p>'}
+      <div class="h2">📝 فلوس عند الزباين (آجل) <button class="btn ghost sm" data-addtx="receivable">+ آجل</button></div>
+      ${rc.length ? rc.map((r) => `<div class="it" style="background:#fff;border-radius:14px;padding:10px;margin:8px 0;display:flex;align-items:center;gap:10px"><div class="t" style="flex:1"><b>${esc(r.name || "زبون")}</b><div class="mut">${esc(r.phone)}</div></div><b style="color:#b45309">${money(r.bal)}</b><button class="btn sm green" data-rpaid="${esc(r.phone)}">✅ دفع</button></div>`).join("") : '<p class="mut">مفيش فلوس آجل. علشان تسجّل طلب آجل، غيّر طريقة الدفع في الطلب لـ «📝 آجل».</p>'}
+      <div class="h2">📒 سجل الحركات</div>
+      <div class="list">${tx.length ? [...tx].sort((x, y) => new Date(y.date || y.created_at) - new Date(x.date || x.created_at)).map((t) => `<div class="it"><div class="t"><b>${KINDS[t.kind] || t.kind}${t.category ? " · " + esc(t.category) : ""}</b><span class="mut">${esc(t.date || dayKey(t.created_at))}${t.party_name ? " · " + esc(t.party_name) : ""}${t.note ? " · " + esc(t.note) : ""}</span></div><b>${money(t.amount)}</b><button class="btn sm ghost" data-deltx="${t.id}">🗑️</button></div>`).join("") : '<p class="mut">مفيش حركات في الفترة دي.</p>'}</div>`;
+  }
+  function txSheet(kind, preset) {
+    preset = preset || {};
+    const isRec = kind === "receivable" || kind === "receivable_paid";
+    sheet(`<h3>${KINDS[kind]}</h3>
+      ${kind === "expense" ? `<label class="f"><span>النوع</span><select class="in" id="tCat">${EXP_CATS.map((c) => `<option>${c}</option>`).join("")}</select></label>` : ""}
+      ${kind === "purchase" ? `<div class="row2"><label class="f"><span>الصنف</span><input class="in" id="tCat" placeholder="زبيدي، روبيان..."></label><label class="f"><span>المورد (اختياري)</span><input class="in" id="tParty" placeholder="اسم التاجر"></label></div>` : ""}
+      ${kind === "income" ? `<label class="f"><span>البيان</span><input class="in" id="tCat" placeholder="مثال: بيع جملة"></label>` : ""}
+      ${isRec ? `<div class="row2"><label class="f"><span>اسم الزبون</span><input class="in" id="tPName" value="${esc(preset.name || "")}"></label><label class="f"><span>الرقم</span><input class="in" id="tPhone" type="tel" value="${esc(preset.phone || "")}" ${preset.phone ? "readonly" : ""}></label></div>` : ""}
+      <div class="row2"><label class="f"><span>المبلغ (د.ك) *</span><input class="in" id="tAmt" type="number" step="0.005" min="0" inputmode="decimal" value="${preset.amount != null ? num(preset.amount).toFixed(3) : ""}"></label><label class="f"><span>التاريخ</span><input class="in" id="tDate" type="date" value="${dayKey(new Date())}"></label></div>
+      <label class="f"><span>ملاحظة</span><input class="in" id="tNote" value="${esc(preset.note || "")}"></label>
+      <button class="btn tq block" id="tSave">💾 حفظ</button>`, () => {
+      $("tSave").onclick = async () => {
+        const amount = num($("tAmt").value); if (!(amount > 0)) return toast("اكتب المبلغ", "err");
+        const row = { kind, amount, date: $("tDate").value || dayKey(new Date()), note: $("tNote").value.trim() || null, category: $("tCat") ? $("tCat").value.trim() || null : null, party: preset.party || null, party_name: preset.party_name || null };
+        if (kind === "purchase" && $("tParty").value.trim()) row.party_name = $("tParty").value.trim();
+        if (isRec) { const ph = ($("tPhone").value || "").replace(/\D/g, ""); if (!ph) return toast("اكتب رقم الزبون", "err"); row.party = /^[124569]\d{7}$/.test(ph) ? "965" + ph : ph; row.party_name = $("tPName").value.trim() || null; }
+        try { $("tSave").disabled = true; await Store.saveTransaction(row); closeSheet(); toast("اتسجّل ✓"); await refresh(); } catch (e) { toast(e.message.includes("transactions") ? "شغّل كود SQL بتاع الحسابات الأول" : e.message, "err"); $("tSave").disabled = false; }
+      };
+    });
+  }
+  function exportCsv() {
+    const rows = [["النوع", "التاريخ", "البيان", "الطرف", "طريقة الدفع", "المبلغ"]];
+    A.orders.filter((o) => o.status === "delivered" && inPeriod(o.created_at)).forEach((o) => rows.push(["مبيعات – طلب #" + o.order_no, dayKey(o.created_at), (o.items || []).map((i) => i.name_ar + " ×" + i.qty).join(" + "), o.customer_name + " " + o.phone, PAY[o.payment || "cash"].replace(/^\S+ /, ""), num(o.total).toFixed(3)]));
+    A.tx.filter((t) => inPeriod(t.date || t.created_at)).forEach((t) => rows.push([KINDS[t.kind].replace(/^\S+ /, ""), t.date || dayKey(t.created_at), [t.category, t.note].filter(Boolean).join(" – "), t.party_name || "", "", (["purchase", "expense", "driver_settle"].includes(t.kind) ? "-" : "") + num(t.amount).toFixed(3)]));
+    const csv = "﻿" + rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+    const label = (PERIODS.find((p) => p[0] === A.period) || [, ""])[1];
+    const file = new File([csv], `goten-حسابات-${label}-${dayKey(new Date())}.csv`, { type: "text/csv" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file] }).catch(() => {});
+    else { const l = document.createElement("a"); l.href = URL.createObjectURL(file); l.download = file.name; document.body.appendChild(l); l.click(); l.remove(); }
+  }
+
   // ---------- الزباين ----------
   function customerList() {
     const m = new Map();
@@ -279,7 +367,7 @@
     const rb = $("resetBtn"); if (rb) rb.onclick = async () => { if (await UI.ask("مسح كل التعديلات والطلبات التجريبية؟")) { await Store.resetDemo(); await refresh(); toast("تم"); } };
   }
   document.addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust]"); if (!el || !A.me) return;
+    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx]"); if (!el || !A.me) return;
     const d = el.dataset;
     try {
       if (d.tab) { A.tab = d.tab; render(); scrollTo(0, 0); }
@@ -298,6 +386,12 @@
         A.bulk = false; toast(`تم تحديث ${n} سعر ✓`); await refresh();
       }
       else if (d.quick) { const [id, st] = d.quick.split(":"); await Store.updateOrder(id, { status: st }); toast("تم ✓"); await refresh(); }
+      else if (d.period) { A.period = d.period; render(); }
+      else if (d.addtx) txSheet(d.addtx);
+      else if (d.export !== undefined) exportCsv();
+      else if (d.settle) { const r = driverCash().find((x) => x.d.id === d.settle); txSheet("driver_settle", { amount: r.bal, party: r.d.id, party_name: r.d.full_name, note: "تسليم كاش" }); }
+      else if (d.rpaid) { const r = receivables().find((x) => x.phone === d.rpaid); txSheet("receivable_paid", { amount: r.bal, phone: r.phone, name: r.name }); }
+      else if (d.deltx) { if (await UI.ask("حذف الحركة دي؟")) { await Store.deleteTransaction(d.deltx); toast("اتحذفت"); await refresh(); } }
       else if (d.pushall !== undefined) pushAll();
       else if (d.import !== undefined) importSheet();
       else if (d.delcust) { if (await UI.ask("حذف الزبون ده من القايمة؟")) { await Store.deleteCustomer(d.delcust); toast("اتحذف"); await refresh(); } }
@@ -316,7 +410,8 @@
   document.addEventListener("change", async (e) => {
     const el = e.target, d = el.dataset; if (!A.me) return;
     try {
-      if (d.ostatus) { await Store.updateOrder(d.ostatus, { status: el.value }); toast("تم تحديث الحالة ✓"); await refresh(); }
+      if (d.opay) { await Store.updateOrder(d.opay, { payment: el.value }); toast("تم تحديث طريقة الدفع ✓"); await refresh(); }
+      else if (d.ostatus) { await Store.updateOrder(d.ostatus, { status: el.value }); toast("تم تحديث الحالة ✓"); await refresh(); }
       else if (d.odriver !== undefined && d.odriver) { const o = A.orders.find((x) => x.id === d.odriver); const patch = { driver_id: el.value || null }; if (el.value && ["new", "confirmed"].includes(o.status)) patch.status = "preparing"; await Store.updateOrder(d.odriver, patch); toast("تم تعيين المندوب ✓"); await refresh(); }
       else if (d.stock) { const p = A.products.find((x) => x.id === d.stock); await Store.saveProduct({ ...p, in_stock: el.checked }); toast(el.checked ? "متوفر ✓" : "تم إخفاؤه كغير متوفر"); await refresh(); }
       else if (d.role) { const p = A.profiles.find((x) => x.id === d.role); await Store.saveProfile({ ...p, role: el.value }); toast("تم تحديث الصلاحية ✓"); await refresh(); }
