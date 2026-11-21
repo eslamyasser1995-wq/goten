@@ -61,7 +61,7 @@
 
   const fmtDate = (d) => { try { return new Date(d).toLocaleString("ar-KW", { dateStyle: "short", timeStyle: "short" }); } catch (e) { return d; } };
 
-  const LOGO = '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="30" fill="#13C4C4"/><path d="M11 32c6-9 16-13 26-10 4 1 7 4 9 6l7-6v20l-7-6c-2 2-5 5-9 6-10 3-20-1-26-10z" fill="#fff"/><circle cx="21" cy="30" r="2.6" fill="#0B2545"/><path d="M10 49c5 3 9 3 14 0s9-3 14 0 9 3 14 0" stroke="#0B2545" stroke-width="3" fill="none" stroke-linecap="round"/></svg>';
+  const LOGO = '<img src="icon-192.png" alt="Goten" style="width:38px;height:38px;border-radius:10px;object-fit:cover">';
 
   window.UI = { LOGO, ask, esc, money, num, ls, toast, sheet, closeSheet, STATUS, STATUS_FLOW, AREAS, fmtDate };
 })();

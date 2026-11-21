@@ -1,4 +1,4 @@
-// تطبيق العملاء – إسلامكو
+// تطبيق العملاء – Goten
 (function () {
   const { esc, money, ls, toast, sheet, closeSheet, STATUS, STATUS_FLOW, AREAS, fmtDate, LOGO } = UI;
   const T = {
@@ -33,7 +33,7 @@
   function header() {
     const s = S.settings, logo = s.logo ? `<img src="${esc(s.logo)}" alt="" style="width:38px;height:38px;border-radius:50%;object-fit:cover">` : LOGO;
     const tag = (S.lang === "en" ? s.tagline_en : s.tagline_ar) || t("tag");
-    return `<header class="top" style="${s.header_color ? "background:" + esc(s.header_color) : ""}"><div class="wrap"><div class="row"><div class="brand">${logo}<div>${esc(s.store_name || "إسلامكو ISLAMKO")}<small>${esc(tag)}</small></div></div>${S.edit ? '<button class="ebtn" data-ed="header" title="تعديل">✏️</button>' : ""}<div class="sp"></div>${S.canEdit ? `<button class="chip-btn" data-editmode>${S.edit ? "✅ تم" : "⚙️ تحكم"}</button>` : ""}<button class="chip-btn" data-lang>${t("lang")}</button></div>
+    return `<header class="top" style="${s.header_color ? "background:" + esc(s.header_color) : ""}"><div class="wrap"><div class="row"><div class="brand">${logo}<div>${esc(s.store_name || "Goten")}<small>${esc(tag)}</small></div></div>${S.edit ? '<button class="ebtn" data-ed="header" title="تعديل">✏️</button>' : ""}<div class="sp"></div>${S.canEdit ? `<button class="chip-btn" data-editmode>${S.edit ? "✅ تم" : "⚙️ تحكم"}</button>` : ""}<button class="chip-btn" data-lang>${t("lang")}</button></div>
       ${S.edit ? `<div class="etools"><button data-ed="newprod">➕ منتج</button><button data-ed="newcat">🗂️ قسم</button><button data-ed="newban">🖼️ بنر</button><button data-ed="header">🎨 الشريط العلوي</button><a href="admin.html" target="_blank" rel="noopener">📊 لوحة التحكم</a><a href="driver.html" target="_blank" rel="noopener">🛵 المناديب</a></div>` : ""}
       ${S.view === "home" ? `<div class="search">🔍<input id="q" placeholder="${t("search")}" value="${esc(S.q)}" autocomplete="off"></div>` : ""}</div></header>`;
   }
@@ -187,7 +187,7 @@
       if (S.edit) { S.edit = false; try { sessionStorage.removeItem("ik_edit"); } catch (e) {} await load(); return render(); }
       if (Store.live) return enterEdit();
       return sheet(`<h3>⚙️ دخول وضع التحكم</h3><label class="f"><span>رقم الدخول (PIN)</span><input class="in" id="epin" type="password" inputmode="numeric" placeholder="1234"></label><button class="btn tq block" id="epinBtn">دخول</button><p class="mut">الرقم الافتراضي 1234 – تغيّره من ملف config.js</p>`, () => {
-        $("epinBtn").onclick = () => { if ($("epin").value === String((window.ISLAMKO_CONFIG || {}).DEMO_ADMIN_PIN || "1234")) { Store.demoLogin({ id: "admin", role: "admin", full_name: "المدير" }); closeSheet(); enterEdit(); } else toast("PIN غير صحيح", "err"); };
+        $("epinBtn").onclick = () => { if ($("epin").value === String((window.Goten_CONFIG || {}).DEMO_ADMIN_PIN || "1234")) { Store.demoLogin({ id: "admin", role: "admin", full_name: "المدير" }); closeSheet(); enterEdit(); } else toast("PIN غير صحيح", "err"); };
       });
     }
     const v = el.dataset.ed, [k, id] = v.split(":");

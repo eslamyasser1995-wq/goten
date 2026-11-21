@@ -1,6 +1,6 @@
 // طبقة البيانات: وضع تجريبي (localStorage) أو حقيقي (Supabase)
 (function () {
-  const C = window.ISLAMKO_CONFIG || {};
+  const C = window.Goten_CONFIG || {};
   const LIVE = !!(C.SUPABASE_URL && C.SUPABASE_ANON_KEY);
   const KEY = "islamko_demo_v1";
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
@@ -25,7 +25,7 @@
   // ---------- بيانات تجريبية ----------
   function art(emoji, c1, c2, text) {
     const H = text ? 200 : 300;
-    const t = text ? `<text x="375" y="95" font-size="34" font-weight="700" fill="#fff" text-anchor="end" font-family="sans-serif">${text}</text><text x="375" y="135" font-size="18" fill="#fff" opacity=".85" text-anchor="end" font-family="sans-serif">إسلامكو ISLAMKO</text>` : "";
+    const t = text ? `<text x="375" y="95" font-size="34" font-weight="700" fill="#fff" text-anchor="end" font-family="sans-serif">${text}</text><text x="375" y="135" font-size="18" fill="#fff" opacity=".85" text-anchor="end" font-family="sans-serif">Goten</text>` : "";
     const s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 ${H}"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs><rect width="400" height="${H}" fill="url(#g)"/>${t}<text x="${text ? 95 : 200}" y="${text ? 145 : 195}" font-size="${text ? 100 : 140}" text-anchor="middle">${emoji}</text></svg>`;
     return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(s);
   }

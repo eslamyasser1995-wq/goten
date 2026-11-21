@@ -67,7 +67,7 @@
   function editHeader(s, E) {
     const st = { image: s.logo || "" };
     sheet(`<h3 style="margin:0 0 10px">تعديل الشريط العلوي</h3><div class="mut" style="margin-bottom:6px">الشعار (صورة مربعة):</div>${imgPicker(st.image)}
-      <label class="f"><span>اسم المتجر</span><input class="in" id="h_name" value="${esc(s.store_name || "إسلامكو ISLAMKO")}"></label>
+      <label class="f"><span>اسم المتجر</span><input class="in" id="h_name" value="${esc(s.store_name || "Goten")}"></label>
       <div class="row2"><label class="f"><span>الشعار النصي بالعربي</span><input class="in" id="h_tar" value="${esc(s.tagline_ar || "أسماك ومأكولات بحرية طازجة")}"></label><label class="f"><span>Tagline (English)</span><input class="in" id="h_ten" value="${esc(s.tagline_en || "Fresh fish & seafood")}"></label></div>
       <div class="row2"><label class="f"><span>شريط التنبيه بالعربي</span><input class="in" id="h_nar" value="${esc(s.notice_ar || "")}"></label><label class="f"><span>Notice (English)</span><input class="in" id="h_nen" value="${esc(s.notice_en || "")}"></label></div>
       <label class="f"><span>لون الشريط</span><input class="in" id="h_color" type="color" value="${esc(s.header_color || "#0B2545")}" style="height:48px"></label>

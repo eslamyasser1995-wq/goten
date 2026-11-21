@@ -1,7 +1,7 @@
-// لوحة تحكم إسلامكو
+// لوحة تحكم Goten
 (function () {
   const { esc, money, toast, sheet, closeSheet, STATUS, fmtDate, LOGO, num } = UI;
-  const C = window.ISLAMKO_CONFIG || {};
+  const C = window.Goten_CONFIG || {};
   const $ = (id) => document.getElementById(id);
   const A = { tab: "dash", me: null, orders: [], products: [], cats: [], banners: [], profiles: [], settings: {}, ofilter: "active", pq: "", bulk: false, known: null };
   const TABS = [["dash", "📊 الرئيسية"], ["orders", "🧾 الطلبات"], ["products", "🐟 المنتجات"], ["cats", "🗂️ الأقسام"], ["banners", "🖼️ البنرات"], ["team", "🛵 المناديب"], ["settings", "⚙️ الإعدادات"]];
@@ -11,7 +11,7 @@
 
   // ---------- الدخول ----------
   function loginView(msg) {
-    $("app").innerHTML = `<div class="login"><div class="brand" style="justify-content:center;color:var(--navy);font-size:22px;margin-bottom:6px">${LOGO}<span>لوحة تحكم إسلامكو</span></div>
+    $("app").innerHTML = `<div class="login"><div class="brand" style="justify-content:center;color:var(--navy);font-size:22px;margin-bottom:6px">${LOGO}<span>لوحة تحكم Goten</span></div>
       ${msg ? `<div class="notice">${msg}</div>` : ""}
       ${Store.live ? `<div class="card"><label class="f"><span>البريد الإلكتروني</span><input class="in" id="em" type="email" autocomplete="username"></label><label class="f"><span>كلمة المرور</span><input class="in" id="pw" type="password" autocomplete="current-password"></label>
         <button class="btn block" id="inBtn">دخول</button><button class="btn ghost block" style="margin-top:8px" id="upBtn">إنشاء حساب أدمن جديد</button></div>`

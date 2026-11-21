@@ -1,4 +1,4 @@
-// تطبيق المناديب – إسلامكو
+// تطبيق المناديب – Goten
 (function () {
   const { esc, money, toast, STATUS, fmtDate, LOGO, num } = UI;
   const $ = (id) => document.getElementById(id);
@@ -7,7 +7,7 @@
   async function loginView(msg) {
     let demoList = "";
     if (!Store.live) { const ps = (await Store.profiles()).filter((p) => p.role === "driver"); demoList = ps.map((p) => `<button class="btn ghost block" style="margin:6px 0" data-demo="${p.id}">🛵 ${esc(p.full_name)}</button>`).join("") || '<p class="mut">لا يوجد مناديب – أضفهم من لوحة التحكم.</p>'; }
-    $("app").innerHTML = `<div class="login"><div class="brand" style="justify-content:center;color:var(--navy);font-size:22px;margin-bottom:6px">${LOGO}<span>مناديب إسلامكو</span></div>${msg ? `<div class="notice">${msg}</div>` : ""}
+    $("app").innerHTML = `<div class="login"><div class="brand" style="justify-content:center;color:var(--navy);font-size:22px;margin-bottom:6px">${LOGO}<span>مناديب Goten</span></div>${msg ? `<div class="notice">${msg}</div>` : ""}
       ${Store.live ? `<div class="card"><label class="f"><span>البريد الإلكتروني</span><input class="in" id="em" type="email" autocomplete="username"></label><label class="f"><span>كلمة المرور</span><input class="in" id="pw" type="password" autocomplete="current-password"></label><button class="btn block" id="inBtn">دخول</button></div>
         <details class="card"><summary><b>مندوب جديد؟ سجّل هنا</b></summary><label class="f"><span>الاسم</span><input class="in" id="nn"></label><label class="f"><span>رقم الهاتف</span><input class="in" id="np" type="tel" inputmode="numeric" placeholder="5xxxxxxx"></label><p class="mut">اكتب البريد وكلمة المرور فوق ثم اضغط:</p><button class="btn tq block" id="upBtn">إنشاء حساب</button></details>`
       : `<div class="card"><span class="demo-tag">وضع تجريبي</span><p class="mut">اختر المندوب:</p>${demoList}</div>`}</div>`;
@@ -48,7 +48,7 @@
     const done = D.orders.filter((o) => o.status === "delivered" && isToday(o.updated_at || o.created_at));
     const cash = done.filter((o) => o.payment === "cash").reduce((a, o) => a + num(o.total), 0);
     const list = D.tab === "active" ? active : done;
-    $("app").innerHTML = `<header class="top"><div class="wrap"><div class="row"><div class="brand">${LOGO}<div>مناديب إسلامكو<small>${esc(D.me.full_name || "")}</small></div></div><div class="sp"></div><button class="chip-btn" id="outBtn">خروج</button></div>
+    $("app").innerHTML = `<header class="top"><div class="wrap"><div class="row"><div class="brand">${LOGO}<div>مناديب Goten<small>${esc(D.me.full_name || "")}</small></div></div><div class="sp"></div><button class="chip-btn" id="outBtn">خروج</button></div>
       <div class="tabs"><button class="${D.tab === "active" ? "on" : ""}" data-tab="active">الطلبات الحالية (${active.length})</button><button class="${D.tab === "done" ? "on" : ""}" data-tab="done">تم توصيلها اليوم (${done.length})</button></div></div></header>
       <main><div class="wrap"><div class="stats" style="margin-top:12px"><div class="stat"><span class="mut">تم توصيلها اليوم</span><b>${done.length}</b></div><div class="stat"><span class="mut">كاش محصّل اليوم</span><b>${money(cash)}</b></div></div>
       ${list.map(card).join("") || `<div class="empty"><div class="e">${D.tab === "active" ? "😌" : "📦"}</div>${D.tab === "active" ? "ما في طلبات معيّنة لك حالياً" : "لسه ما وصلت طلبات اليوم"}</div>`}</div></main>`;
