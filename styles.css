@@ -144,3 +144,6 @@ main{padding-bottom:calc(90px + var(--safe-b))}
 .bwrap{flex:0 0 88%;position:relative;scroll-snap-align:center}
 .bwrap img{width:100%;aspect-ratio:2/1;object-fit:cover;border-radius:var(--r)}
 .addcircle{width:66px;height:66px;margin:0 auto 6px;border-radius:50%;border:2px dashed var(--tq);display:flex!important;align-items:center;justify-content:center;font-size:22px;background:#effcfc}
+
+.top .brand{min-width:0}.top .brand div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip-btn{white-space:nowrap}

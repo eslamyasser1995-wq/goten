@@ -63,5 +63,28 @@
 
   const LOGO = '<img src="icon-192.png" alt="Goten" style="width:38px;height:38px;border-radius:10px;object-fit:cover">';
 
-  window.UI = { LOGO, ask, esc, money, num, ls, toast, sheet, closeSheet, STATUS, STATUS_FLOW, AREAS, fmtDate };
+  // تفعيل إشعارات الطلبات (آيفون: لازم التطبيق يكون متضاف للشاشة الرئيسية)
+  const VAPID = (window.ISLAMKO_CONFIG || {}).VAPID_PUBLIC || "BLJPBQpfAO6iyV7bK8dWMAxjR_b68wlAK5upO5n4eJYoCGibkVNRfBT_Bv1cSADD_ltb4U9PacaINZW9zuOn_Gw";
+  function b64ToU8(b) { const p = "=".repeat((4 - (b.length % 4)) % 4); const s = atob((b + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from([...s].map((c) => c.charCodeAt(0))); }
+  const pushState = () => {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      const ios = /iPhone|iPad/.test(navigator.userAgent), standalone = navigator.standalone || matchMedia("(display-mode: standalone)").matches;
+      return ios && !standalone ? "need_home" : "unsupported";
+    }
+    return Notification.permission;
+  };
+  async function enablePush(saveFn) {
+    const st = pushState();
+    if (st === "need_home") throw new Error("ضيف الصفحة دي للشاشة الرئيسية الأول (مشاركة ← إضافة إلى الشاشة الرئيسية)، وافتحها من الأيقونة، وبعدين فعّل الإشعارات");
+    if (st === "unsupported") throw new Error("الجهاز ده مش بيدعم الإشعارات – حدّث الآيفون لـ iOS 16.4 أو أحدث");
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") throw new Error("الإشعارات مقفولة – فعّلها من إعدادات الآيفون ← الإشعارات ← Goten");
+    const reg = await navigator.serviceWorker.register("sw.js");
+    await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(VAPID) });
+    await saveFn(sub);
+  }
+
+  window.UI = { pushState, enablePush, LOGO, ask, esc, money, num, ls, toast, sheet, closeSheet, STATUS, STATUS_FLOW, AREAS, fmtDate };
 })();

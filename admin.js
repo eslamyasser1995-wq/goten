@@ -38,10 +38,11 @@
   function render() {
     const body = { dash, orders, products, cats, banners, team, settings }[A.tab]();
     $("app").innerHTML = `<header class="top"><div class="wrap wide"><div class="row"><div class="brand">${LOGO}<div>لوحة التحكم<small>${esc(A.me.full_name || A.me.email || "")} ${Store.live ? "" : '· <span class="demo-tag">تجريبي</span>'}</small></div></div><div class="sp"></div>
-      <a class="chip-btn" href="index.html" target="_blank" style="text-decoration:none">👁️ المتجر</a><button class="chip-btn" id="outBtn">خروج</button></div>
+      <button class="chip-btn" id="pushBtn">${UI.pushState() === "granted" ? "🔔" : "🔕 فعّل"}</button><a class="chip-btn" href="index.html" target="_blank" style="text-decoration:none">👁️</a><button class="chip-btn" id="outBtn">خروج</button></div>
       <div class="tabs">${TABS.map(([k, l]) => `<button class="${A.tab === k ? "on" : ""}" data-tab="${k}">${l}${k === "orders" && newCount() ? ` (${newCount()})` : ""}</button>`).join("")}</div></div></header>
       <main><div class="wrap wide">${body}</div></main>`;
     $("outBtn").onclick = async () => { await Store.signOut(); loginView(); };
+    $("pushBtn").onclick = async () => { try { await UI.enablePush((s) => Store.savePush(s)); toast("✅ الإشعارات اتفعّلت – هيجيلك إشعار مع كل طلب جديد"); render(); } catch (e) { toast(e.message, "err"); } };
     bind();
   }
   const newCount = () => A.orders.filter((o) => o.status === "new").length;

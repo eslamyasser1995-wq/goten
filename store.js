@@ -162,6 +162,11 @@
     demoLogin(user) { sess.set(user); },
     async profiles() { return LIVE ? chk(await sb.from("profiles").select("*").order("created_at", { ascending: false })) : db().profiles; },
     async saveProfile(p) { if (LIVE) { const { id, role, full_name, phone } = p; return chk(await sb.from("profiles").update({ role, full_name, phone }).eq("id", id)); } return upsertArr(db().profiles, p); },
+    async savePush(sub) {
+      if (!LIVE) throw new Error("الإشعارات بتشتغل في النسخة الحقيقية بس");
+      const j = sub.toJSON();
+      chk(await sb.rpc("save_push_subscription", { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth }));
+    },
     async resetDemo() { if (!LIVE) { mem = seed(); persist(); } }
   };
   window.Store = Store;

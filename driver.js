@@ -48,11 +48,12 @@
     const done = D.orders.filter((o) => o.status === "delivered" && isToday(o.updated_at || o.created_at));
     const cash = done.filter((o) => o.payment === "cash").reduce((a, o) => a + num(o.total), 0);
     const list = D.tab === "active" ? active : done;
-    $("app").innerHTML = `<header class="top"><div class="wrap"><div class="row"><div class="brand">${LOGO}<div>مناديب Goten<small>${esc(D.me.full_name || "")}</small></div></div><div class="sp"></div><button class="chip-btn" id="outBtn">خروج</button></div>
+    $("app").innerHTML = `<header class="top"><div class="wrap"><div class="row"><div class="brand">${LOGO}<div>مناديب Goten<small>${esc(D.me.full_name || "")}</small></div></div><div class="sp"></div><button class="chip-btn" id="pushBtn">${UI.pushState() === "granted" ? "🔔" : "🔕 فعّل"}</button><button class="chip-btn" id="outBtn">خروج</button></div>
       <div class="tabs"><button class="${D.tab === "active" ? "on" : ""}" data-tab="active">الطلبات الحالية (${active.length})</button><button class="${D.tab === "done" ? "on" : ""}" data-tab="done">تم توصيلها اليوم (${done.length})</button></div></div></header>
       <main><div class="wrap"><div class="stats" style="margin-top:12px"><div class="stat"><span class="mut">تم توصيلها اليوم</span><b>${done.length}</b></div><div class="stat"><span class="mut">كاش محصّل اليوم</span><b>${money(cash)}</b></div></div>
       ${list.map(card).join("") || `<div class="empty"><div class="e">${D.tab === "active" ? "😌" : "📦"}</div>${D.tab === "active" ? "ما في طلبات معيّنة لك حالياً" : "لسه ما وصلت طلبات اليوم"}</div>`}</div></main>`;
     $("outBtn").onclick = async () => { await Store.signOut(); D.me = null; loginView(); };
+    $("pushBtn").onclick = async () => { try { await UI.enablePush((s) => Store.savePush(s)); toast("✅ الإشعارات اتفعّلت"); render(); } catch (e) { toast(e.message, "err"); } };
   }
   async function refresh() {
     D.orders = await Store.driverOrders();
