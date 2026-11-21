@@ -174,6 +174,21 @@
     },
     async customerPushCount() { if (!LIVE) return 0; return chk(await sb.rpc("customer_push_count")); },
     async broadcastPush(title, body) { if (!LIVE) throw new Error("الإشعارات بتشتغل في النسخة الحقيقية بس"); return chk(await sb.rpc("broadcast_push", { p_title: title, p_body: body })); },
+    // زباين مضافين يدوي / مستوردين
+    async importedCustomers() {
+      if (LIVE) { const r = await sb.from("customers").select("*").order("created_at", { ascending: false }); if (r.error) { console.warn(r.error.message); return []; } return r.data; }
+      return db().customers || [];
+    },
+    async saveCustomers(rows) {
+      if (LIVE) return chk(await sb.from("customers").upsert(rows, { onConflict: "phone" }));
+      const d = db(); d.customers = d.customers || [];
+      for (const r of rows) { const i = d.customers.findIndex((x) => x.phone === r.phone); if (i >= 0) d.customers[i] = { ...d.customers[i], ...r }; else d.customers.unshift({ ...r, created_at: nowISO() }); }
+      persist();
+    },
+    async deleteCustomer(phone) {
+      if (LIVE) return chk(await sb.from("customers").delete().eq("phone", phone));
+      const d = db(); d.customers = (d.customers || []).filter((x) => x.phone !== phone); persist();
+    },
     async resetDemo() { if (!LIVE) { mem = seed(); persist(); } }
   };
   window.Store = Store;

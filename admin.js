@@ -26,8 +26,8 @@
   }
 
   async function loadAll() {
-    const [o, p, c, b, pr, s] = await Promise.all([Store.orders(), Store.products(), Store.categories(), Store.banners(), Store.profiles(), Store.settings()]);
-    Object.assign(A, { orders: o, products: p, cats: c, banners: b, profiles: pr, settings: s || {} });
+    const [o, p, c, b, pr, s, ic] = await Promise.all([Store.orders(), Store.products(), Store.categories(), Store.banners(), Store.profiles(), Store.settings(), Store.importedCustomers().catch(() => [])]);
+    Object.assign(A, { orders: o, products: p, cats: c, banners: b, profiles: pr, settings: s || {}, imported: ic || [] });
     const ids = new Set(o.map((x) => x.id));
     if (A.known) { const fresh = o.filter((x) => !A.known.has(x.id)); if (fresh.length) { beep(); toast(`🔔 طلب جديد #${fresh[0].order_no}`); } }
     A.known = ids;
@@ -109,9 +109,11 @@
   // ---------- الزباين ----------
   function customerList() {
     const m = new Map();
+    for (const x of A.imported || []) m.set(x.phone, { phone: x.phone, name: x.name || "زبون", orders: 0, spent: 0, optin: !!x.optin, imported: true, last: x.created_at, addr: x.area || "" });
     for (const o of [...A.orders].sort((x, y) => new Date(x.created_at) - new Date(y.created_at))) {
       if (!o.phone) continue;
       const c = m.get(o.phone) || { phone: o.phone, name: o.customer_name, orders: 0, spent: 0, optin: false };
+      c.imported = false;
       c.name = o.customer_name || c.name; c.orders++; if (o.status !== "cancelled") c.spent += num(o.total);
       c.last = o.created_at; c.addr = `${o.area} – ق${o.block || ""} – ش${o.street || ""}${o.avenue ? " – ج" + o.avenue : ""} – م${o.house || ""}`;
       if (o.marketing_opt_in) c.optin = true;
@@ -130,10 +132,11 @@
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px"><button class="btn tq sm" data-bcast>✉️ اكتب رسالة وابعتها</button><button class="btn ghost sm" data-vcf>📇 حفظهم في جهات الاتصال</button><button class="btn ghost sm" data-copynums>📋 نسخ الأرقام</button></div></div>
       <div class="card"><b>🔔 إشعار عروض على التطبيق</b><p class="mut" style="margin:6px 0">بيوصل كإشعار لكل زبون فعّل الإشعارات في Goten (<b id="pushCnt">…</b> زبون). من غير واتساب.</p>
         <button class="btn tq sm" data-pushall>🔔 ابعت إشعار لكل الزباين</button></div>
+      <button class="btn block" data-import style="margin-bottom:10px">➕ إضافة / استيراد زباين</button>
       <input class="in" id="cq" placeholder="ابحث بالاسم أو الرقم أو المنطقة..." value="${esc(A.cq)}">
-      <div class="list">${list.map((c) => `<div class="it" style="align-items:flex-start"><div style="font-size:28px">👤</div><div class="t"><b>${esc(c.name)} ${c.optin ? '<span class="pill g">📣 عروض</span>' : ""}</b>
-        <span class="mut">${esc(c.phone)} · ${c.orders} طلب · ${money(c.spent)}</span><div class="mut" style="white-space:normal">📍 ${esc(c.addr)}</div><div class="mut">آخر طلب: ${fmtDate(c.last)}</div></div>
-        <div style="display:flex;flex-direction:column;gap:6px"><a class="btn sm ghost" href="tel:+${esc(c.phone)}">📞</a><a class="btn sm ghost" target="_blank" rel="noopener" href="https://wa.me/${esc(c.phone)}">💬</a></div></div>`).join("") || '<p class="mut">لسه مفيش زباين – هيظهروا هنا أول ما ييجي أول طلب.</p>'}</div>`;
+      <div class="list">${list.map((c) => `<div class="it" style="align-items:flex-start"><div style="font-size:28px">👤</div><div class="t"><b>${esc(c.name)} ${c.optin ? '<span class="pill g">📣 عروض</span>' : ""}${c.imported ? '<span class="pill">📥 مضاف</span>' : ""}</b>
+        <span class="mut">${esc(c.phone)}${c.orders ? ` · ${c.orders} طلب · ${money(c.spent)}` : ""}</span>${c.addr ? `<div class="mut" style="white-space:normal">📍 ${esc(c.addr)}</div>` : ""}<div class="mut">${c.orders ? "آخر طلب" : "اتضاف"}: ${fmtDate(c.last)}</div></div>
+        <div style="display:flex;flex-direction:column;gap:6px"><a class="btn sm ghost" href="tel:+${esc(c.phone)}">📞</a><a class="btn sm ghost" target="_blank" rel="noopener" href="https://wa.me/${esc(c.phone)}">💬</a>${c.imported ? `<button class="btn sm ghost" data-delcust="${esc(c.phone)}">🗑️</button>` : ""}</div></div>`).join("") || '<p class="mut">لسه مفيش زباين – هيظهروا هنا أول ما ييجي أول طلب.</p>'}</div>`;
   }
   function pushAll() {
     sheet(`<h3>🔔 إشعار لكل الزباين</h3><label class="f"><span>العنوان</span><input class="in" id="pT" maxlength="60" placeholder="مثال: 🐟 عرض اليوم"></label>
@@ -180,6 +183,69 @@
     });
   }
 
+  // ---------- استيراد زباين ----------
+  function normPhone(raw) {
+    let d = String(raw || "").replace(/[^\d+]/g, "").replace(/^\+/, "").replace(/^00/, "");
+    d = d.replace(/\D/g, "");
+    if (/^[124569]\d{7}$/.test(d)) return "965" + d;
+    if (/^965[124569]\d{7}$/.test(d)) return d;
+    if (d.length >= 10 && d.length <= 15) return d;
+    return null;
+  }
+  function parseText(txt) {
+    const out = [];
+    for (const line of String(txt).split(/\r?\n/)) {
+      const m = line.match(/(\+?[\d\s\-()]{8,20})/); if (!m) continue;
+      const phone = normPhone(m[1]); if (!phone) continue;
+      const name = line.replace(m[1], "").replace(/[,;:\-–|]+/g, " ").trim();
+      out.push({ phone, name: name || "زبون" });
+    }
+    return out;
+  }
+  function parseVcf(txt) {
+    const out = [];
+    for (const card of String(txt).split(/BEGIN:VCARD/i).slice(1)) {
+      const un = card.replace(/\r?\n[ \t]/g, "");
+      const fn = (un.match(/^FN[^:]*:(.*)$/im) || [])[1] || "";
+      const n = (un.match(/^N[^:]*:(.*)$/im) || [])[1] || "";
+      const tels = [...un.matchAll(/^(?:item\d+\.)?TEL[^:]*:(.*)$/gim)].map((x) => normPhone(x[1])).filter(Boolean);
+      const name = (fn || n.split(";").filter(Boolean).reverse().join(" ")).trim();
+      if (tels[0]) out.push({ phone: tels[0], name: name || "زبون" });
+    }
+    return out;
+  }
+  function importSheet() {
+    let pending = [];
+    const hasPicker = "contacts" in navigator && "ContactsManager" in window;
+    sheet(`<h3>➕ إضافة / استيراد زباين</h3>
+      <div class="card"><b>زبون واحد</b><div class="row2"><label class="f"><span>الاسم</span><input class="in" id="iName"></label><label class="f"><span>الرقم</span><input class="in" id="iPhone" type="tel" inputmode="tel" placeholder="5xxxxxxx"></label></div>
+        <label class="f"><span>المنطقة (اختياري)</span><input class="in" id="iArea"></label><button class="btn sm" id="iOne">➕ إضافة</button></div>
+      <div class="card"><b>كذا زبون مرة واحدة</b><p class="mut">الصق قايمة، كل زبون في سطر: الاسم والرقم (أي شكل).</p>
+        <textarea class="in" id="iList" rows="5" placeholder="محمد 55512345&#10;أحمد +965 6661 2345&#10;99887766"></textarea>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><input type="file" id="iFile" accept=".vcf,text/vcard,text/x-vcard,.txt,.csv" hidden><button class="btn ghost sm" id="iFileBtn">📇 ملف جهات اتصال (vcf)</button>${hasPicker ? '<button class="btn ghost sm" id="iPick">📱 اختار من جهات الاتصال</button>' : ""}</div></div>
+      <label class="switch"><span>الزباين دول وافقوا يستلموا عروض</span><input type="checkbox" id="iOpt"></label>
+      <div id="iPrev" class="mut" style="margin:8px 0"></div>
+      <button class="btn tq block" id="iSave" disabled>💾 حفظ</button>`, () => {
+      const show = () => {
+        const map = new Map(); pending.forEach((r) => map.set(r.phone, r)); pending = [...map.values()];
+        $("iPrev").innerHTML = pending.length ? `جاهز للإضافة: <b>${pending.length}</b> زبون<br>${pending.slice(0, 5).map((r) => esc(r.name) + " – " + r.phone).join("<br>")}${pending.length > 5 ? "<br>…" : ""}` : "";
+        $("iSave").disabled = !pending.length;
+      };
+      $("iList").oninput = () => { pending = parseText($("iList").value); show(); };
+      $("iOne").onclick = () => { const ph = normPhone($("iPhone").value); if (!ph) return toast("الرقم مش صحيح", "err"); pending.push({ phone: ph, name: $("iName").value.trim() || "زبون", area: $("iArea").value.trim() || null }); $("iName").value = ""; $("iPhone").value = ""; $("iArea").value = ""; show(); };
+      $("iFileBtn").onclick = () => $("iFile").click();
+      $("iFile").onchange = async (e) => { const f = e.target.files[0]; if (!f) return; const t = await f.text(); const rows = /BEGIN:VCARD/i.test(t) ? parseVcf(t) : parseText(t); pending = pending.concat(rows); show(); toast(`لقيت ${rows.length} رقم`); };
+      if ($("iPick")) $("iPick").onclick = async () => { try { const cs = await navigator.contacts.select(["name", "tel"], { multiple: true }); for (const c of cs) { const ph = normPhone((c.tel || [])[0]); if (ph) pending.push({ phone: ph, name: (c.name || [])[0] || "زبون" }); } show(); } catch (err) { toast("مقدرتش أفتح جهات الاتصال", "err"); } };
+      $("iSave").onclick = async () => {
+        $("iSave").disabled = true;
+        const known = new Set(A.orders.map((o) => o.phone));
+        const rows = pending.map((r) => ({ phone: r.phone, name: r.name, area: r.area || null, optin: $("iOpt").checked, source: "import" }));
+        try { await Store.saveCustomers(rows); closeSheet(); toast(`✅ اتضاف ${rows.length} زبون${rows.some((r) => known.has(r.phone)) ? " (اللي عنده طلبات اتحدّث)" : ""}`); await refresh(); }
+        catch (err) { toast(err.message.includes("customers") ? "شغّل كود SQL بتاع الزباين الأول" : err.message, "err"); $("iSave").disabled = false; }
+      };
+    });
+  }
+
   // ---------- المناديب ----------
   function team() {
     const R = { pending: "بانتظار الموافقة", driver: "مندوب", admin: "أدمن", blocked: "موقوف" };
@@ -213,7 +279,7 @@
     const rb = $("resetBtn"); if (rb) rb.onclick = async () => { if (await UI.ask("مسح كل التعديلات والطلبات التجريبية؟")) { await Store.resetDemo(); await refresh(); toast("تم"); } };
   }
   document.addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall]"); if (!el || !A.me) return;
+    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust]"); if (!el || !A.me) return;
     const d = el.dataset;
     try {
       if (d.tab) { A.tab = d.tab; render(); scrollTo(0, 0); }
@@ -233,6 +299,8 @@
       }
       else if (d.quick) { const [id, st] = d.quick.split(":"); await Store.updateOrder(id, { status: st }); toast("تم ✓"); await refresh(); }
       else if (d.pushall !== undefined) pushAll();
+      else if (d.import !== undefined) importSheet();
+      else if (d.delcust) { if (await UI.ask("حذف الزبون ده من القايمة؟")) { await Store.deleteCustomer(d.delcust); toast("اتحذف"); await refresh(); } }
       else if (d.bcast !== undefined) broadcast();
       else if (d.vcf !== undefined) vcfShare();
       else if (d.copynums !== undefined) { const n = targets().map((c) => "+" + c.phone).join("\n"); try { await navigator.clipboard.writeText(n); toast(`اتنسخ ${targets().length} رقم ✓`); } catch (e) { sheet(`<h3>الأرقام</h3><textarea class="in" rows="10">${esc(n)}</textarea>`); } }
