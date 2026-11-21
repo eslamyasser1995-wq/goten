@@ -33,7 +33,7 @@
   function header() {
     const s = S.settings, logo = s.logo ? `<img src="${esc(s.logo)}" alt="" style="width:38px;height:38px;border-radius:50%;object-fit:cover">` : LOGO;
     const tag = (S.lang === "en" ? s.tagline_en : s.tagline_ar) || t("tag");
-    return `<header class="top" style="${s.header_color ? "background:" + esc(s.header_color) : ""}"><div class="wrap"><div class="row"><div class="brand">${logo}<div>${esc(s.store_name || "Goten")}<small>${esc(tag)}</small></div></div>${S.edit ? '<button class="ebtn" data-ed="header" title="تعديل">✏️</button>' : ""}<div class="sp"></div>${S.canEdit ? `<button class="chip-btn" data-editmode>${S.edit ? "✅ تم" : "⚙️ تحكم"}</button>` : ""}<button class="chip-btn" data-lang>${t("lang")}</button></div>
+    return `<header class="top" style="${s.header_color ? "background:" + esc(s.header_color) : ""}"><div class="wrap"><div class="row"><div class="brand">${logo}<div>${esc(s.store_name || "Goten")}<small>${esc(tag)}</small></div></div>${S.edit ? '<button class="ebtn" data-ed="header" title="تعديل">✏️</button>' : ""}<div class="sp"></div>${S.canEdit ? `<button class="chip-btn" data-editmode>${S.edit ? "✅ تم" : "⚙️ تحكم"}</button>` : ""}${Store.live && !S.edit ? `<button class="chip-btn" data-pushc aria-label="notifications">${UI.pushState() === "granted" ? "🔔" : "🔕"}</button>` : ""}<button class="chip-btn" data-lang>${t("lang")}</button></div>
       ${S.edit ? `<div class="etools"><button data-ed="newprod">➕ منتج</button><button data-ed="newcat">🗂️ قسم</button><button data-ed="newban">🖼️ بنر</button><button data-ed="header">🎨 الشريط العلوي</button><a href="admin.html" target="_blank" rel="noopener">📊 لوحة التحكم</a><a href="driver.html" target="_blank" rel="noopener">🛵 المناديب</a></div>` : ""}
       ${S.view === "home" ? `<div class="search">🔍<input id="q" placeholder="${t("search")}" value="${esc(S.q)}" autocomplete="off"></div>` : ""}</div></header>`;
   }
@@ -161,7 +161,7 @@
       const r = await Store.placeOrder(p);
       S.my.unshift({ id: r.id, order_no: r.order_no, total: r.total, created_at: new Date().toISOString() }); ls.set("ik_orders", S.my.slice(0, 50));
       S.cart = {}; saveCart(); S.view = "orders"; render();
-      sheet(`<div class="empty" style="padding:20px 0"><div class="e">✅</div><h2>${t("placed")}</h2><p>${t("orderNo")}: <b>#${r.order_no}</b></p><p>${t("total")}: <b>${money(r.total, S.lang)}</b></p><button class="btn tq block" data-track2="${r.id}">${t("track")}</button></div>`);
+      sheet(`<div class="empty" style="padding:20px 0"><div class="e">✅</div><h2>${t("placed")}</h2><p>${t("orderNo")}: <b>#${r.order_no}</b></p><p>${t("total")}: <b>${money(r.total, S.lang)}</b></p><button class="btn tq block" data-track2="${r.id}">${t("track")}</button>${Store.live && UI.pushState() !== "granted" ? `<button class="btn ghost block" style="margin-top:8px" data-pushc>🔔 ${S.lang === "en" ? "Get offers as notifications" : "فعّل الإشعارات عشان توصلك العروض"}</button>` : ""}</div>`);
     } catch (e) {
       const k = Object.keys(T.ar.errs).find((x) => String(e.message).includes(x));
       toast(k ? t("errs")[k] : e.message, "err"); btn.disabled = false; if (k === "PRODUCT_UNAVAILABLE") { await load(); }
@@ -169,6 +169,8 @@
   }
 
   document.addEventListener("click", (e) => {
+    const pc = e.target.closest("[data-pushc]");
+    if (pc) return customerPush();
     const ed = e.target.closest("[data-ed],[data-editmode]");
     if (ed) { e.stopPropagation(); return onEdit(ed); }
     const el = e.target.closest("[data-inc],[data-dec],[data-view],[data-cat],[data-open],[data-lang],[data-track],[data-track2]"); if (!el) return;
@@ -206,6 +208,17 @@
     if (!Store.live) { S.canEdit = true; } else { try { const me = await Store.me(); S.canEdit = !!(me && me.role === "admin"); } catch (e) { S.canEdit = false; } }
     let was = false; try { was = sessionStorage.getItem("ik_edit") === "1"; } catch (e) {}
     if (S.canEdit && was) { const me = await Store.me(); if (me && me.role === "admin") S.edit = true; }
+  }
+
+  // ---------- إشعارات العروض للزبون ----------
+  async function customerPush() {
+    const en = S.lang === "en", st = UI.pushState();
+    if (st === "need_home") return sheet(`<h3>🔔 ${en ? "Turn on notifications" : "فعّل الإشعارات"}</h3><p>${en ? "On iPhone, notifications work after adding the app to your Home Screen:" : "على الآيفون، الإشعارات بتشتغل بعد ما تضيف التطبيق للشاشة الرئيسية:"}</p>
+      <ol style="line-height:2"><li>${en ? "Tap Share ⬆️ in Safari" : "دوس زرار المشاركة ⬆️ في Safari"}</li><li>${en ? "Choose “Add to Home Screen”" : "اختار «إضافة إلى الشاشة الرئيسية»"}</li><li>${en ? "Open Goten from the new icon and tap 🔕" : "افتح Goten من الأيقونة الجديدة ودوس 🔕"}</li></ol>`);
+    try {
+      await UI.enablePush((sub) => Store.saveCustomerPush(sub, (S.addr && S.addr.phone) ? "965" + S.addr.phone : null));
+      closeSheet(); toast(en ? "✅ You'll get our offers as notifications" : "✅ تمام! هتوصلك العروض كإشعارات"); render();
+    } catch (e) { toast(e.message, "err"); }
   }
 
   function refreshSheetQty(id) { const sq = document.getElementById("sq"); if (sq) { const p = S.products.find((x) => x.id === id); if (p) sq.innerHTML = qtyCtl(p); } }

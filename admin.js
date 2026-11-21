@@ -128,10 +128,25 @@
       <div class="card"><b>📣 رسالة لكل الزباين</b>
         <label class="switch"><span>الموافقين على العروض بس (${opt})</span><input type="checkbox" id="cOnlyOpt" ${A.cOnlyOpt ? "checked" : ""}></label>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px"><button class="btn tq sm" data-bcast>✉️ اكتب رسالة وابعتها</button><button class="btn ghost sm" data-vcf>📇 حفظهم في جهات الاتصال</button><button class="btn ghost sm" data-copynums>📋 نسخ الأرقام</button></div></div>
+      <div class="card"><b>🔔 إشعار عروض على التطبيق</b><p class="mut" style="margin:6px 0">بيوصل كإشعار لكل زبون فعّل الإشعارات في Goten (<b id="pushCnt">…</b> زبون). من غير واتساب.</p>
+        <button class="btn tq sm" data-pushall>🔔 ابعت إشعار لكل الزباين</button></div>
       <input class="in" id="cq" placeholder="ابحث بالاسم أو الرقم أو المنطقة..." value="${esc(A.cq)}">
       <div class="list">${list.map((c) => `<div class="it" style="align-items:flex-start"><div style="font-size:28px">👤</div><div class="t"><b>${esc(c.name)} ${c.optin ? '<span class="pill g">📣 عروض</span>' : ""}</b>
         <span class="mut">${esc(c.phone)} · ${c.orders} طلب · ${money(c.spent)}</span><div class="mut" style="white-space:normal">📍 ${esc(c.addr)}</div><div class="mut">آخر طلب: ${fmtDate(c.last)}</div></div>
         <div style="display:flex;flex-direction:column;gap:6px"><a class="btn sm ghost" href="tel:+${esc(c.phone)}">📞</a><a class="btn sm ghost" target="_blank" rel="noopener" href="https://wa.me/${esc(c.phone)}">💬</a></div></div>`).join("") || '<p class="mut">لسه مفيش زباين – هيظهروا هنا أول ما ييجي أول طلب.</p>'}</div>`;
+  }
+  function pushAll() {
+    sheet(`<h3>🔔 إشعار لكل الزباين</h3><label class="f"><span>العنوان</span><input class="in" id="pT" maxlength="60" placeholder="مثال: 🐟 عرض اليوم"></label>
+      <label class="f"><span>الرسالة</span><textarea class="in" id="pB" rows="3" maxlength="200" placeholder="مثال: زبيدي طازج بـ 3.500 د.ك بدل 4.250 – لحد الساعة 10 بالليل"></textarea></label>
+      <button class="btn tq block" id="pSend">📤 إرسال لكل الزباين</button><p class="mut">الإشعار بيوصل فوراً لكل زبون مفعّل الإشعارات، ولما يدوس عليه بيفتح المتجر.</p>`, () => {
+      $("pSend").onclick = async () => {
+        const t = $("pT").value.trim(), b = $("pB").value.trim();
+        if (!t || !b) return toast("اكتب العنوان والرسالة", "err");
+        if (!(await UI.ask(`إرسال الإشعار لكل الزباين المفعّلين؟`))) return;
+        $("pSend").disabled = true;
+        try { const n = await Store.broadcastPush(t, b); closeSheet(); toast(`✅ اتبعت لـ ${n} زبون`); } catch (e) { toast(e.message, "err"); $("pSend").disabled = false; }
+      };
+    });
   }
   function vcfShare() {
     const list = targets(); if (!list.length) return toast("مفيش زباين في القايمة", "err");
@@ -188,6 +203,7 @@
   // ---------- الأحداث ----------
   function bind() {
     const cq = $("cq"); if (cq) cq.oninput = (e) => { A.cq = e.target.value; const pos = e.target.selectionStart; render(); $("cq").focus(); $("cq").setSelectionRange(pos, pos); };
+    const pc = $("pushCnt"); if (pc) Store.customerPushCount().then((n) => { pc.textContent = n; }).catch(() => { pc.textContent = "0"; });
     const co = $("cOnlyOpt"); if (co) co.onchange = (e) => { A.cOnlyOpt = e.target.checked; };
     const pq = $("pq"); if (pq) pq.oninput = (e) => { A.pq = e.target.value; const pos = e.target.selectionStart; render(); $("pq").focus(); $("pq").setSelectionRange(pos, pos); };
     const ss = $("sSave"); if (ss) ss.onclick = async () => {
@@ -197,7 +213,7 @@
     const rb = $("resetBtn"); if (rb) rb.onclick = async () => { if (await UI.ask("مسح كل التعديلات والطلبات التجريبية؟")) { await Store.resetDemo(); await refresh(); toast("تم"); } };
   }
   document.addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums]"); if (!el || !A.me) return;
+    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall]"); if (!el || !A.me) return;
     const d = el.dataset;
     try {
       if (d.tab) { A.tab = d.tab; render(); scrollTo(0, 0); }
@@ -216,6 +232,7 @@
         A.bulk = false; toast(`تم تحديث ${n} سعر ✓`); await refresh();
       }
       else if (d.quick) { const [id, st] = d.quick.split(":"); await Store.updateOrder(id, { status: st }); toast("تم ✓"); await refresh(); }
+      else if (d.pushall !== undefined) pushAll();
       else if (d.bcast !== undefined) broadcast();
       else if (d.vcf !== undefined) vcfShare();
       else if (d.copynums !== undefined) { const n = targets().map((c) => "+" + c.phone).join("\n"); try { await navigator.clipboard.writeText(n); toast(`اتنسخ ${targets().length} رقم ✓`); } catch (e) { sheet(`<h3>الأرقام</h3><textarea class="in" rows="10">${esc(n)}</textarea>`); } }

@@ -167,6 +167,13 @@
       const j = sub.toJSON();
       chk(await sb.rpc("save_push_subscription", { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth }));
     },
+    async saveCustomerPush(sub, phone) {
+      if (!LIVE) throw new Error("DEMO");
+      const j = sub.toJSON();
+      chk(await sb.rpc("save_customer_push", { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_phone: phone || null }));
+    },
+    async customerPushCount() { if (!LIVE) return 0; return chk(await sb.rpc("customer_push_count")); },
+    async broadcastPush(title, body) { if (!LIVE) throw new Error("الإشعارات بتشتغل في النسخة الحقيقية بس"); return chk(await sb.rpc("broadcast_push", { p_title: title, p_body: body })); },
     async resetDemo() { if (!LIVE) { mem = seed(); persist(); } }
   };
   window.Store = Store;
