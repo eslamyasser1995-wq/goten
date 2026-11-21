@@ -3,8 +3,8 @@
   const { esc, money, toast, sheet, closeSheet, STATUS, fmtDate, LOGO, num } = UI;
   const C = window.ISLAMKO_CONFIG || {};
   const $ = (id) => document.getElementById(id);
-  const A = { tab: "dash", me: null, orders: [], products: [], cats: [], banners: [], profiles: [], settings: {}, ofilter: "active", pq: "", bulk: false, known: null };
-  const TABS = [["dash", "📊 الرئيسية"], ["orders", "🧾 الطلبات"], ["products", "🐟 المنتجات"], ["cats", "🗂️ الأقسام"], ["banners", "🖼️ البنرات"], ["team", "🛵 المناديب"], ["settings", "⚙️ الإعدادات"]];
+  const A = { cq: "", cOnlyOpt: true, tab: "dash", me: null, orders: [], products: [], cats: [], banners: [], profiles: [], settings: {}, ofilter: "active", pq: "", bulk: false, known: null };
+  const TABS = [["dash", "📊 الرئيسية"], ["orders", "🧾 الطلبات"], ["products", "🐟 المنتجات"], ["cats", "🗂️ الأقسام"], ["banners", "🖼️ البنرات"], ["customers", "👥 الزباين"], ["team", "🛵 المناديب"], ["settings", "⚙️ الإعدادات"]];
   const drivers = () => A.profiles.filter((p) => p.role === "driver");
   const ctx = () => ({ products: A.products, cats: A.cats, banners: A.banners, done: refresh });
   const pname = (id) => (A.profiles.find((p) => p.id === id) || {}).full_name || "—";
@@ -36,7 +36,7 @@
 
   // ---------- الواجهة ----------
   function render() {
-    const body = { dash, orders, products, cats, banners, team, settings }[A.tab]();
+    const body = { dash, orders, products, cats, banners, customers, team, settings }[A.tab]();
     $("app").innerHTML = `<header class="top"><div class="wrap wide"><div class="row"><div class="brand">${LOGO}<div>لوحة التحكم<small>${esc(A.me.full_name || A.me.email || "")} ${Store.live ? "" : '· <span class="demo-tag">تجريبي</span>'}</small></div></div><div class="sp"></div>
       <button class="chip-btn" id="pushBtn">${UI.pushState() === "granted" ? "🔔" : "🔕 فعّل"}</button><a class="chip-btn" href="index.html" target="_blank" style="text-decoration:none">👁️</a><button class="chip-btn" id="outBtn">خروج</button></div>
       <div class="tabs">${TABS.map(([k, l]) => `<button class="${A.tab === k ? "on" : ""}" data-tab="${k}">${l}${k === "orders" && newCount() ? ` (${newCount()})` : ""}</button>`).join("")}</div></div></header>
@@ -106,6 +106,65 @@
     return `<div class="h2">البنرات الإعلانية <button class="btn tq sm" data-editban="">+ بنر</button></div><p class="mut">المقاس المثالي: عرض ضعف الارتفاع (مثلاً 1200×600).</p>
       <div class="list">${A.banners.map((b) => `<div class="it"><img src="${esc(b.image)}" alt="" style="width:110px;height:55px"><div class="t"><b>${esc(b.title || "بدون عنوان")}</b>${!b.active ? '<span class="pill r">مخفي</span>' : ""}</div><button class="btn sm ghost" data-editban="${b.id}">✏️</button></div>`).join("")}</div>`;
   }
+  // ---------- الزباين ----------
+  function customerList() {
+    const m = new Map();
+    for (const o of [...A.orders].sort((x, y) => new Date(x.created_at) - new Date(y.created_at))) {
+      if (!o.phone) continue;
+      const c = m.get(o.phone) || { phone: o.phone, name: o.customer_name, orders: 0, spent: 0, optin: false };
+      c.name = o.customer_name || c.name; c.orders++; if (o.status !== "cancelled") c.spent += num(o.total);
+      c.last = o.created_at; c.addr = `${o.area} – ق${o.block || ""} – ش${o.street || ""}${o.avenue ? " – ج" + o.avenue : ""} – م${o.house || ""}`;
+      if (o.marketing_opt_in) c.optin = true;
+      m.set(o.phone, c);
+    }
+    return [...m.values()].sort((a, b) => new Date(b.last) - new Date(a.last));
+  }
+  const targets = () => customerList().filter((c) => !A.cOnlyOpt || c.optin);
+  function customers() {
+    const all = customerList(), q = A.cq.trim();
+    const list = all.filter((c) => !q || (c.name + " " + c.phone + " " + c.addr).includes(q));
+    const opt = all.filter((c) => c.optin).length;
+    return `<div class="h2">الزباين (${all.length}) <span class="mut" style="font-weight:500">${opt} موافقين على العروض</span></div>
+      <div class="card"><b>📣 رسالة لكل الزباين</b>
+        <label class="switch"><span>الموافقين على العروض بس (${opt})</span><input type="checkbox" id="cOnlyOpt" ${A.cOnlyOpt ? "checked" : ""}></label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px"><button class="btn tq sm" data-bcast>✉️ اكتب رسالة وابعتها</button><button class="btn ghost sm" data-vcf>📇 حفظهم في جهات الاتصال</button><button class="btn ghost sm" data-copynums>📋 نسخ الأرقام</button></div></div>
+      <input class="in" id="cq" placeholder="ابحث بالاسم أو الرقم أو المنطقة..." value="${esc(A.cq)}">
+      <div class="list">${list.map((c) => `<div class="it" style="align-items:flex-start"><div style="font-size:28px">👤</div><div class="t"><b>${esc(c.name)} ${c.optin ? '<span class="pill g">📣 عروض</span>' : ""}</b>
+        <span class="mut">${esc(c.phone)} · ${c.orders} طلب · ${money(c.spent)}</span><div class="mut" style="white-space:normal">📍 ${esc(c.addr)}</div><div class="mut">آخر طلب: ${fmtDate(c.last)}</div></div>
+        <div style="display:flex;flex-direction:column;gap:6px"><a class="btn sm ghost" href="tel:+${esc(c.phone)}">📞</a><a class="btn sm ghost" target="_blank" rel="noopener" href="https://wa.me/${esc(c.phone)}">💬</a></div></div>`).join("") || '<p class="mut">لسه مفيش زباين – هيظهروا هنا أول ما ييجي أول طلب.</p>'}</div>`;
+  }
+  function vcfShare() {
+    const list = targets(); if (!list.length) return toast("مفيش زباين في القايمة", "err");
+    const vcf = list.map((c) => `BEGIN:VCARD\r\nVERSION:3.0\r\nN:${c.name} Goten;;;;\r\nFN:${c.name} - Goten\r\nTEL;TYPE=CELL:+${c.phone}\r\nNOTE:${c.addr}\r\nEND:VCARD`).join("\r\n");
+    const file = new File([vcf], "goten-customers.vcf", { type: "text/vcard" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file], title: "زباين Goten" }).catch(() => {});
+    else { const a = document.createElement("a"); a.href = URL.createObjectURL(file); a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); }
+    sheet(`<h3>📇 بعد ما تحفظ جهات الاتصال</h3><p>عشان تبعت رسالة واحدة توصل للكل مرة واحدة من الواتساب:</p>
+      <ol style="line-height:1.9"><li>افتح الملف واختار <b>«إضافة كل جهات الاتصال (${list.length})»</b>.</li><li>في الواتساب: <b>الدردشات ← ⋯ ← قوائم البث ← قائمة جديدة</b>.</li><li>اختار الزباين (أساميهم آخرها <b>Goten</b>) ← <b>إنشاء</b>.</li><li>اكتب الرسالة مرة واحدة وابعتها، توصل لكل واحد لوحده.</li></ol>
+      <p class="mut">⚠️ رسالة قايمة البث بتوصل بس للي حافظ رقمك عنده. عشان كده اطلب من الزباين يحفظوا رقم المحل.</p>`);
+  }
+  function broadcast() {
+    const list = targets(); if (!list.length) return toast("مفيش زباين في القايمة", "err");
+    let i = 0;
+    sheet(`<h3>✉️ رسالة لـ ${list.length} زبون</h3><textarea class="in" id="bMsg" rows="5" placeholder="مثال: عرض اليوم 🐟 زبيدي طازج بـ 3.500 د.ك بدل 4.250 – اطلب من التطبيق: ${esc(location.origin + location.pathname.replace(/admin\.html.*$/, ""))}"></textarea>
+      <label class="switch"><span>اكتب اسم الزبون في أول الرسالة</span><input type="checkbox" id="bName" checked></label>
+      <div class="card" style="background:#effcfc"><div id="bWho" class="mut"></div><a class="btn tq block" id="bSend" target="_blank" rel="noopener" style="margin-top:8px">📤 إرسال</a>
+      <div style="display:flex;gap:6px;margin-top:8px"><button class="btn ghost sm" id="bSkip">تخطي ⏭️</button><button class="btn ghost sm" id="bCopy">📋 نسخ الرسالة</button></div></div>
+      <p class="mut">كل ضغطة على «إرسال» بتفتح الواتساب على الزبون والرسالة مكتوبة، تدوس إرسال وترجع هنا للي بعده. الواتساب مش بيسمح بإرسال تلقائي للكل من غير ما تدوس.</p>`, () => {
+      const upd = () => {
+        if (i >= list.length) { $("bWho").innerHTML = "<b>✅ خلصت كل الزباين</b>"; $("bSend").style.display = "none"; return; }
+        const c = list[i], m = $("bMsg").value.trim(), txt = ($("bName").checked ? `أهلاً ${c.name} 👋\n` : "") + m;
+        $("bWho").innerHTML = `<b>${i + 1} / ${list.length}</b> – ${esc(c.name)} (${esc(c.phone)})`;
+        $("bSend").href = "https://wa.me/" + c.phone + "?text=" + encodeURIComponent(txt);
+      };
+      $("bMsg").oninput = upd; $("bName").onchange = upd;
+      $("bSend").onclick = (e) => { if (!$("bMsg").value.trim()) { e.preventDefault(); return toast("اكتب الرسالة الأول", "err"); } setTimeout(() => { i++; upd(); }, 400); };
+      $("bSkip").onclick = () => { i++; upd(); };
+      $("bCopy").onclick = async () => { try { await navigator.clipboard.writeText($("bMsg").value); toast("اتنسخت ✓"); } catch (e) { toast("انسخها يدوي", "err"); } };
+      upd();
+    });
+  }
+
   // ---------- المناديب ----------
   function team() {
     const R = { pending: "بانتظار الموافقة", driver: "مندوب", admin: "أدمن", blocked: "موقوف" };
@@ -128,6 +187,8 @@
 
   // ---------- الأحداث ----------
   function bind() {
+    const cq = $("cq"); if (cq) cq.oninput = (e) => { A.cq = e.target.value; const pos = e.target.selectionStart; render(); $("cq").focus(); $("cq").setSelectionRange(pos, pos); };
+    const co = $("cOnlyOpt"); if (co) co.onchange = (e) => { A.cOnlyOpt = e.target.checked; };
     const pq = $("pq"); if (pq) pq.oninput = (e) => { A.pq = e.target.value; const pos = e.target.selectionStart; render(); $("pq").focus(); $("pq").setSelectionRange(pos, pos); };
     const ss = $("sSave"); if (ss) ss.onclick = async () => {
       const v = (k) => $("s_" + k).value.trim();
@@ -136,7 +197,7 @@
     const rb = $("resetBtn"); if (rb) rb.onclick = async () => { if (await UI.ask("مسح كل التعديلات والطلبات التجريبية؟")) { await Store.resetDemo(); await refresh(); toast("تم"); } };
   }
   document.addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader]"); if (!el || !A.me) return;
+    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums]"); if (!el || !A.me) return;
     const d = el.dataset;
     try {
       if (d.tab) { A.tab = d.tab; render(); scrollTo(0, 0); }
@@ -155,6 +216,9 @@
         A.bulk = false; toast(`تم تحديث ${n} سعر ✓`); await refresh();
       }
       else if (d.quick) { const [id, st] = d.quick.split(":"); await Store.updateOrder(id, { status: st }); toast("تم ✓"); await refresh(); }
+      else if (d.bcast !== undefined) broadcast();
+      else if (d.vcf !== undefined) vcfShare();
+      else if (d.copynums !== undefined) { const n = targets().map((c) => "+" + c.phone).join("\n"); try { await navigator.clipboard.writeText(n); toast(`اتنسخ ${targets().length} رقم ✓`); } catch (e) { sheet(`<h3>الأرقام</h3><textarea class="in" rows="10">${esc(n)}</textarea>`); } }
       else if (d.editheader !== undefined) Editors.header(A.settings, ctx());
       else if (d.storeopen !== undefined) { await Store.saveSettings({ store_open: !A.settings.store_open }); await refresh(); }
       else if (d.adddrv !== undefined) {
