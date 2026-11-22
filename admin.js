@@ -26,8 +26,8 @@
   }
 
   async function loadAll() {
-    const [o, p, c, b, pr, s, ic, tx, mv] = await Promise.all([Store.orders(), Store.products(), Store.categories(), Store.banners(), Store.profiles(), Store.settings(), Store.importedCustomers().catch(() => []), Store.transactions().catch(() => []), Store.stockMoves().catch(() => null)]);
-    Object.assign(A, { orders: o, products: p, cats: c, banners: b, profiles: pr, settings: s || {}, imported: ic || [], tx: tx || [], moves: mv });
+    const [o, p, c, b, pr, s, ic, tx, mv, sp] = await Promise.all([Store.orders(), Store.products(), Store.categories(), Store.banners(), Store.profiles(), Store.settings(), Store.importedCustomers().catch(() => []), Store.transactions().catch(() => []), Store.stockMoves().catch(() => null), Store.suppliers().catch(() => null)]);
+    Object.assign(A, { orders: o, products: p, cats: c, banners: b, profiles: pr, settings: s || {}, imported: ic || [], tx: tx || [], moves: mv, sups: sp });
     const ids = new Set(o.map((x) => x.id));
     if (A.known) { const fresh = o.filter((x) => !A.known.has(x.id)); if (fresh.length) { beep(); toast(`🔔 طلب جديد #${fresh[0].order_no}`); } }
     A.known = ids;
@@ -111,7 +111,7 @@
   }
   // ---------- الحسابات ----------
   const PAY = { cash: "💵 كاش", knet_on_delivery: "💳 كي نت", credit: "📝 آجل" };
-  const KINDS = { sale: "🧾 مبيعات خارج التطبيق", purchase: "🛒 مشتريات", expense: "💸 مصروف", income: "💰 إيراد آخر", driver_settle: "🛵 استلام من مندوب", receivable: "📝 آجل يدوي", receivable_paid: "✅ سداد آجل" };
+  const KINDS = { sale: "🧾 مبيعات خارج التطبيق", purchase: "🛒 مشتريات", expense: "💸 مصروف", income: "💰 إيراد آخر", driver_settle: "🛵 استلام من مندوب", receivable: "📝 آجل يدوي", receivable_paid: "✅ سداد آجل", supplier_paid: "💳 سداد مورد" };
   const EXP_CATS = ["بنزين ومواصلات", "رواتب", "إيجار", "كهرباء وماء", "تغليف وثلج", "صيانة", "إعلانات", "أخرى"];
   const PERIODS = [["today", "اليوم"], ["week", "الأسبوع"], ["month", "الشهر"], ["lastmonth", "الشهر اللي فات"], ["all", "الكل"]];
   const dayKey = (d) => { const x = new Date(d); return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0"); };
@@ -164,9 +164,10 @@
         ${byPay.map(([k, v]) => `<div class="line"><span>${PAY[k]}</span><b>${money(v)}</b></div>`).join("")}
         ${pending.length ? `<div class="line mut"><span>طلبات لسه ماتوصّلتش (${pending.length})</span><span>${money(sum(pending, (o) => o.total))}</span></div>` : ""}
         ${Object.keys(byCat).length ? `<div class="mut" style="margin-top:8px"><b>المصاريف حسب النوع:</b></div>${Object.entries(byCat).map(([k, v]) => `<div class="line"><span>${esc(k)}</span><span>${money(v)}</span></div>`).join("")}` : ""}</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" data-addtx="sale">🧾 + مبيعات</button><button class="btn tq sm" data-addtx="purchase">🛒 + مشتريات</button><button class="btn sm red" data-addtx="expense">💸 + مصروف</button><button class="btn sm green" data-addtx="income">💰 + إيراد</button><button class="btn sm" style="background:#7c3aed" data-stockpick>📦 + مخزون</button><button class="btn ghost sm" data-export>📊 تصدير Excel</button></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" data-addtx="sale">🧾 + مبيعات</button><button class="btn tq sm" data-addtx="purchase">🛒 + مشتريات</button><button class="btn sm red" data-addtx="expense">💸 + مصروف</button><button class="btn sm green" data-addtx="income">💰 + إيراد</button><button class="btn sm" style="background:#7c3aed" data-stockpick>📦 + مخزون</button><button class="btn sm" style="background:#0f766e" data-newsup>🚚 + مورد</button><button class="btn ghost sm" data-export>📊 تصدير Excel</button></div>
       <div class="h2">🛵 كاش مع المناديب</div>
       ${dc.length ? dc.map((r) => `<div class="it" style="background:#fff;border-radius:14px;padding:10px;margin:8px 0;display:flex;align-items:center;gap:10px"><div class="t" style="flex:1"><b>${esc(r.d.full_name || "مندوب")}</b><div class="mut">حصّل ${money(r.got)} · سلّم ${money(r.paid)}</div></div><b style="color:${r.bal > 0 ? "#b45309" : "#16a34a"}">${money(r.bal)}</b>${r.bal > 0.0005 ? `<button class="btn sm green" data-settle="${r.d.id}">✅ استلمت</button>` : ""}</div>`).join("") : '<p class="mut">مفيش مناديب.</p>'}
+      ${supSection()}
       <div class="h2">📝 فلوس عند الزباين (آجل) <button class="btn ghost sm" data-addtx="receivable">+ آجل</button></div>
       ${rc.length ? rc.map((r) => `<div class="it" style="background:#fff;border-radius:14px;padding:10px;margin:8px 0;display:flex;align-items:center;gap:10px"><div class="t" style="flex:1"><b>${esc(r.name || "زبون")}</b><div class="mut">${esc(r.phone)}</div></div><b style="color:#b45309">${money(r.bal)}</b><button class="btn sm green" data-rpaid="${esc(r.phone)}">✅ دفع</button></div>`).join("") : '<p class="mut">مفيش فلوس آجل. علشان تسجّل طلب آجل، غيّر طريقة الدفع في الطلب لـ «📝 آجل».</p>'}
       <div class="h2">📒 سجل الحركات</div>
@@ -227,32 +228,37 @@
       ${kind === "expense" ? `<label class="f"><span>النوع</span><select class="in" id="tCat">${EXP_CATS.map((c) => `<option>${c}</option>`).join("")}</select></label>` : ""}
       ${kind === "purchase" ? `<label class="f"><span>المنتج (بيزوّد المخزون)</span><select class="in" id="tProd"><option value="">— حاجة تانية مش منتج (ثلج، أكياس...) —</option>${A.products.map((p) => `<option value="${p.id}" ${preset.product === p.id ? "selected" : ""}>${esc(p.name_ar)}${p.stock != null ? ` (موجود ${fq(p.stock)})` : ""}</option>`).join("")}</select></label>
         <div class="row2"><label class="f" id="tQtyW"><span>الكمية *</span><input class="in" id="tQty" type="number" step="0.25" min="0" inputmode="decimal" placeholder="كام كيلو / حبة"></label><label class="f" id="tCatW"><span>الصنف</span><input class="in" id="tCat" placeholder="ثلج، أكياس..."></label></div>
-        <label class="f"><span>المورد (اختياري)</span><input class="in" id="tParty" placeholder="اسم التاجر"></label>` : ""}
+        <label class="f"><span>المورد</span><select class="in" id="tSup"><option value="">— بدون مورد (اتدفع كاش) —</option>${(A.sups || []).map((x) => `<option value="${x.id}" ${preset.supplier === x.id ? "selected" : ""}>🚚 ${esc(x.name)}${supBal(x.id) > 0.0005 ? ` (عليك ${money(supBal(x.id))})` : ""}</option>`).join("")}</select></label>
+        ${A.sups === null ? `<p class="mut" style="font-size:12px">لتفعيل الموردين شغّل suppliers.sql</p>` : !(A.sups || []).length ? `<p class="mut" style="font-size:12px">ضيف موردينك من زرار «🚚 + مورد» علشان تختارهم هنا</p>` : ""}` : ""}
       ${kind === "sale" ? `<label class="f"><span>اتباع إيه؟</span><input class="in" id="tDesc" placeholder="مثال: 2 كيلو زبيدي – بيع في المحل"></label>
         <label class="f"><span>طريقة الدفع</span><select class="in" id="tPay">${Object.entries(PAY).map(([k, v]) => `<option value="${k}">${v}</option>`).join("")}</select></label>
         <div class="row2"><label class="f"><span>اسم الزبون (اختياري)</span><input class="in" id="tPName"></label><label class="f"><span>رقمه (لازم لو آجل)</span><input class="in" id="tPhone" type="tel" inputmode="tel"></label></div>` : ""}
       ${kind === "income" ? `<label class="f"><span>البيان</span><input class="in" id="tCat" placeholder="مثال: بيع جملة"></label>` : ""}
       ${isRec ? `<div class="row2"><label class="f"><span>اسم الزبون</span><input class="in" id="tPName" value="${esc(preset.name || "")}"></label><label class="f"><span>الرقم</span><input class="in" id="tPhone" type="tel" value="${esc(preset.phone || "")}" ${preset.phone ? "readonly" : ""}></label></div>` : ""}
       <div class="row2"><label class="f"><span>المبلغ (د.ك) *</span><input class="in" id="tAmt" type="number" step="0.005" min="0" inputmode="decimal" value="${preset.amount != null ? num(preset.amount).toFixed(3) : ""}"></label><label class="f"><span>التاريخ</span><input class="in" id="tDate" type="date" value="${dayKey(new Date())}"></label></div>
+      ${kind === "purchase" ? `<label class="f" id="tPaidW" style="display:none"><span>دفعت كام دلوقتي؟ (فاضي = دفعت المبلغ كله، 0 = آجل كله)</span><input class="in" id="tPaid" type="number" step="0.005" min="0" inputmode="decimal" placeholder="المبلغ كله"></label>` : ""}
       <label class="f"><span>ملاحظة</span><input class="in" id="tNote" value="${esc(preset.note || "")}"></label>
       <button class="btn tq block" id="tSave">💾 حفظ</button>`, () => {
-      const tp = $("tProd");
+      const tp = $("tProd"), ts = $("tSup");
+      if (ts) { const s2 = () => { $("tPaidW").style.display = ts.value ? "" : "none"; }; ts.onchange = s2; s2(); }
       if (tp) { const sync = () => { const on = !!tp.value; $("tQtyW").style.display = on ? "" : "none"; $("tCatW").style.display = on ? "none" : ""; }; tp.onchange = sync; sync(); }
       $("tSave").onclick = async () => {
         const amount = num($("tAmt").value); if (!(amount > 0)) return toast("اكتب المبلغ", "err");
         if (tp && tp.value) {
           const qty = num($("tQty").value); if (!(qty > 0)) return toast("اكتب الكمية", "err");
-          const pr = A.products.find((x) => x.id === tp.value), party = $("tParty").value.trim(), note = $("tNote").value.trim();
+          const pr = A.products.find((x) => x.id === tp.value), sup = supOf(ts && ts.value), party = sup ? sup.name : "", note = $("tNote").value.trim();
           try {
             $("tSave").disabled = true;
             await Store.stockMove({ product_id: pr.id, kind: "purchase", qty, cost: amount, note: [party ? "من " + party : "", note].filter(Boolean).join(" – ") || null });
-            await Store.saveTransaction({ kind: "purchase", amount, date: $("tDate").value || dayKey(new Date()), category: pr.name_ar, note: [fq(qty) + " " + (pr.unit_ar || ""), note].filter(Boolean).join(" – "), party_name: party || null });
-            closeSheet(); toast(`اتسجّل ✓ – المخزون زاد ${fq(qty)}`); await refresh();
+            await Store.saveTransaction({ kind: "purchase", amount, date: $("tDate").value || dayKey(new Date()), category: pr.name_ar, note: [fq(qty) + " " + (pr.unit_ar || ""), note].filter(Boolean).join(" – "), party_name: party || null, ...(sup ? { supplier_id: sup.id } : {}) });
+            const owed = await payWithPurchase(sup, amount);
+            closeSheet(); toast(`اتسجّل ✓ – المخزون زاد ${fq(qty)}${owed > 0.0005 ? ` · فاضل عليك للمورد ${money(owed)}` : ""}`); await refresh();
           } catch (e) { $("tSave").disabled = false; toast(/stock_move|function/.test(e.message) ? "شغّل inventory.sql الأول" : e.message, "err"); }
           return;
         }
         const row = { kind, amount, date: $("tDate").value || dayKey(new Date()), note: $("tNote").value.trim() || null, category: $("tCat") ? $("tCat").value.trim() || null : null, party: preset.party || null, party_name: preset.party_name || null };
-        if (kind === "purchase" && $("tParty").value.trim()) row.party_name = $("tParty").value.trim();
+        const sup = kind === "purchase" ? supOf(ts && ts.value) : null;
+        if (sup) { row.party_name = sup.name; row.supplier_id = sup.id; }
         if (kind === "sale") {
           row.category = $("tPay").value; const desc = $("tDesc").value.trim(); row.note = [desc, row.note].filter(Boolean).join(" – ") || null;
           const ph = ($("tPhone").value || "").replace(/\D/g, ""); row.party_name = $("tPName").value.trim() || null;
@@ -260,8 +266,77 @@
           if (row.category === "credit" && !row.party) return toast("البيع الآجل محتاج رقم الزبون", "err");
         }
         if (isRec) { const ph = ($("tPhone").value || "").replace(/\D/g, ""); if (!ph) return toast("اكتب رقم الزبون", "err"); row.party = /^[124569]\d{7}$/.test(ph) ? "965" + ph : ph; row.party_name = $("tPName").value.trim() || null; }
-        try { $("tSave").disabled = true; await Store.saveTransaction(row); closeSheet(); toast("اتسجّل ✓"); await refresh(); } catch (e) { toast(e.message.includes("transactions") ? "شغّل كود SQL بتاع الحسابات الأول" : e.message, "err"); $("tSave").disabled = false; }
+        try { $("tSave").disabled = true; await Store.saveTransaction(row); const owed = sup ? await payWithPurchase(sup, amount) : 0; closeSheet(); toast("اتسجّل ✓" + (owed > 0.0005 ? ` · فاضل عليك للمورد ${money(owed)}` : "")); await refresh(); } catch (e) { toast(e.message.includes("transactions") ? "شغّل كود SQL بتاع الحسابات الأول" : e.message, "err"); $("tSave").disabled = false; }
       };
+    });
+  }
+  // ---------- الموردين ----------
+  const supOf = (id) => (id && (A.sups || []).find((x) => x.id === id)) || null;
+  function supStats(id) {
+    const x = supOf(id), t = A.tx.filter((r) => r.supplier_id === id);
+    const bought = sum(t.filter((r) => r.kind === "purchase")), paid = sum(t.filter((r) => r.kind === "supplier_paid"));
+    return { open: num(x && x.opening_balance), bought, paid, bal: num(x && x.opening_balance) + bought - paid, count: t.filter((r) => r.kind === "purchase").length };
+  }
+  const supBal = (id) => supStats(id).bal;
+  async function payWithPurchase(sup, amount) {
+    if (!sup) return 0;
+    const raw = $("tPaid") ? $("tPaid").value : "", paid = raw === "" ? amount : Math.min(amount, num(raw));
+    if (paid > 0) await Store.saveTransaction({ kind: "supplier_paid", amount: paid, date: $("tDate").value || dayKey(new Date()), supplier_id: sup.id, party_name: sup.name, note: "دفعة مع الفاتورة" });
+    return amount - paid;
+  }
+  function supSection() {
+    if (A.sups === null) return `<div class="h2">🚚 الموردين</div><div class="notice">شغّل ملف <b>suppliers.sql</b> في Supabase علشان تفعّل الموردين.</div>`;
+    const list = A.sups || [], total = list.reduce((a, x) => a + Math.max(0, supBal(x.id)), 0);
+    return `<div class="h2">🚚 الموردين ${total > 0.0005 ? `<span class="mut" style="font-size:14px">· عليك ${money(total)}</span>` : ""} <button class="btn ghost sm" data-newsup>+ مورد</button></div>
+      ${list.length ? list.map((x) => { const st = supStats(x.id); return `<div class="it" style="background:#fff;border-radius:14px;padding:10px;margin:8px 0;display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+        <div class="t" style="flex:1;min-width:140px"><b>🚚 ${esc(x.name)}</b><div class="mut" style="font-size:13px">${x.phone ? `<a href="tel:${esc(x.phone)}">${esc(x.phone)}</a> · ` : ""}اشتريت ${money(st.bought + st.open)} · دفعت ${money(st.paid)}</div></div>
+        <div style="text-align:center"><small class="mut">${st.bal > 0.0005 ? "عليك ليه" : st.bal < -0.0005 ? "ليك عنده" : "خالص"}</small><b style="display:block;color:${st.bal > 0.0005 ? "#dc2626" : "#16a34a"}">${money(Math.abs(st.bal))}</b></div>
+        <div style="display:flex;gap:6px;width:100%"><button class="btn sm green" data-suppay="${x.id}">💳 سداد</button><button class="btn sm tq" data-supbuy="${x.id}">🛒 شراء منه</button><button class="btn sm ghost" data-supstmt="${x.id}">📒 كشف حساب</button><button class="btn sm ghost" data-supedit="${x.id}">✏️</button></div></div>`; }).join("") : '<p class="mut">لسه مفيش موردين. دوس «🚚 + مورد» وضيف التجار اللي بتشتري منهم.</p>'}`;
+  }
+  function supSheet(id) {
+    const x = supOf(id) || {};
+    sheet(`<h3>${id ? "✏️ تعديل مورد" : "🚚 مورد جديد"}</h3>
+      <label class="f"><span>اسم المورد *</span><input class="in" id="spN" value="${esc(x.name || "")}" placeholder="مثال: سوق شرق – أبو علي"></label>
+      <label class="f"><span>رقم الهاتف</span><input class="in" id="spP" type="tel" inputmode="tel" value="${esc(x.phone || "")}"></label>
+      <label class="f"><span>عليك ليه كام من قبل؟ (رصيد سابق – اختياري)</span><input class="in" id="spO" type="number" step="0.005" inputmode="decimal" value="${x.opening_balance ? num(x.opening_balance) : ""}"></label>
+      <label class="f"><span>ملاحظة</span><input class="in" id="spT" value="${esc(x.note || "")}" placeholder="بيورّد إيه، مواعيده..."></label>
+      <button class="btn tq block" id="spS">💾 حفظ</button>${id ? `<button class="btn ghost block" style="margin-top:8px;color:var(--red)" id="spD">🗑️ حذف المورد</button>` : ""}`, () => {
+      $("spS").onclick = async () => {
+        const name = $("spN").value.trim(); if (!name) return toast("اكتب اسم المورد", "err");
+        let phone = $("spP").value.replace(/\D/g, ""); if (/^[124569]\d{7}$/.test(phone)) phone = "965" + phone;
+        try { $("spS").disabled = true; await Store.saveSupplier({ ...(id ? { id } : {}), name, phone: phone || null, opening_balance: num($("spO").value), note: $("spT").value.trim() || null }); closeSheet(); toast("اتحفظ ✓"); await refresh(); }
+        catch (e) { $("spS").disabled = false; toast(/suppliers/.test(e.message) ? "شغّل suppliers.sql الأول" : e.message, "err"); }
+      };
+      const dl = $("spD"); if (dl) dl.onclick = async () => { if (!(await UI.ask("حذف المورد؟ (الحركات القديمة هتفضل في الحسابات)"))) return; await Store.deleteSupplier(id); closeSheet(); toast("اتحذف"); await refresh(); };
+    });
+  }
+  function supPaySheet(id) {
+    const x = supOf(id), bal = supBal(id);
+    sheet(`<h3>💳 سداد لـ ${esc(x.name)}</h3><p class="mut">عليك ليه دلوقتي: <b style="color:#dc2626">${money(Math.max(0, bal))}</b></p>
+      <div class="row2"><label class="f"><span>المبلغ (د.ك) *</span><input class="in" id="ppA" type="number" step="0.005" min="0" inputmode="decimal" value="${bal > 0.0005 ? bal.toFixed(3) : ""}"></label><label class="f"><span>التاريخ</span><input class="in" id="ppD" type="date" value="${dayKey(new Date())}"></label></div>
+      <label class="f"><span>طريقة الدفع</span><select class="in" id="ppM"><option>كاش</option><option>تحويل بنكي</option><option>كي نت / لينك</option></select></label>
+      <label class="f"><span>ملاحظة</span><input class="in" id="ppN"></label><button class="btn green block" id="ppS">✅ تسجيل السداد</button>`, () => {
+      $("ppS").onclick = async () => {
+        const a = num($("ppA").value); if (!(a > 0)) return toast("اكتب المبلغ", "err");
+        try { $("ppS").disabled = true; await Store.saveTransaction({ kind: "supplier_paid", amount: a, date: $("ppD").value || dayKey(new Date()), supplier_id: id, party_name: x.name, category: $("ppM").value, note: $("ppN").value.trim() || null }); closeSheet(); toast(`اتسجّل ✓ – الباقي ${money(Math.max(0, bal - a))}`); await refresh(); }
+        catch (e) { $("ppS").disabled = false; toast(/supplier/.test(e.message) ? "شغّل suppliers.sql الأول" : e.message, "err"); }
+      };
+    });
+  }
+  function supStmt(id) {
+    const x = supOf(id), st = supStats(id);
+    const rows = A.tx.filter((r) => r.supplier_id === id).sort((a, b) => (a.date || dayKey(a.created_at)).localeCompare(b.date || dayKey(b.created_at)) || new Date(a.created_at) - new Date(b.created_at) || (a.kind === "purchase" ? -1 : 1));
+    let run = st.open; const lines = [];
+    if (st.open) lines.push({ d: "", l: "رصيد سابق", a: st.open, run });
+    rows.forEach((r) => { const sign = r.kind === "purchase" ? 1 : -1; run += sign * num(r.amount); lines.push({ d: r.date || dayKey(r.created_at), l: r.kind === "purchase" ? `🛒 ${r.category || "مشتريات"}${r.note ? " – " + r.note : ""}` : `💳 سداد${r.category ? " " + r.category : ""}${r.note ? " – " + r.note : ""}`, a: sign * num(r.amount), run, id: r.id }); });
+    const txt = `كشف حساب ${x.name}\n` + lines.map((l) => `${l.d} ${l.l.replace(/^\S+ /, "")}: ${l.a > 0 ? "+" : ""}${num(l.a).toFixed(3)} (الرصيد ${l.run.toFixed(3)})`).join("\n") + `\nالرصيد النهائي: ${st.bal.toFixed(3)} د.ك`;
+    sheet(`<h3>📒 كشف حساب ${esc(x.name)}</h3>
+      <div class="stats" style="margin:8px 0"><div class="stat"><span class="mut">إجمالي المشتريات</span><b>${money(st.bought + st.open)}</b></div><div class="stat"><span class="mut">إجمالي المدفوع</span><b style="color:#16a34a">${money(st.paid)}</b></div></div>
+      <div class="card">${lines.map((l) => `<div class="line"><span>${esc(l.l)}<br><small class="mut">${esc(l.d)} · الرصيد ${money(l.run)}</small></span><b style="color:${l.a > 0 ? "#dc2626" : "#16a34a"};direction:ltr">${l.a > 0 ? "+" : ""}${num(l.a).toFixed(3)}</b></div>`).join("") || '<p class="mut">لسه مفيش حركات.</p>'}
+        <div class="line total"><span>${st.bal >= 0 ? "عليك ليه" : "ليك عنده"}</span><span>${money(Math.abs(st.bal))}</span></div></div>
+      <div class="row2"><button class="btn green" id="stPay">💳 سداد</button>${x.phone ? `<a class="btn ghost" target="_blank" rel="noopener" href="https://wa.me/${esc(x.phone)}?text=${encodeURIComponent(txt)}">💬 ابعت الكشف</a>` : `<button class="btn ghost" id="stCopy">📋 نسخ الكشف</button>`}</div>`, () => {
+      $("stPay").onclick = () => supPaySheet(id);
+      const cp = $("stCopy"); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(txt); toast("اتنسخ ✓"); } catch (e) { toast("مقدرتش أنسخ", "err"); } };
     });
   }
   function stockPick() {
@@ -276,13 +351,18 @@
   function exportCsv() {
     const rows = [["النوع", "التاريخ", "البيان", "الطرف", "طريقة الدفع", "المبلغ"]];
     A.orders.filter((o) => o.status === "delivered" && inPeriod(o.created_at)).forEach((o) => rows.push(["مبيعات – طلب #" + o.order_no, dayKey(o.created_at), (o.items || []).map((i) => i.name_ar + " ×" + i.qty).join(" + "), o.customer_name + " " + o.phone, PAY[o.payment || "cash"].replace(/^\S+ /, ""), num(o.total).toFixed(3)]));
-    A.tx.filter((t) => inPeriod(t.date || t.created_at)).forEach((t) => rows.push([KINDS[t.kind].replace(/^\S+ /, ""), t.date || dayKey(t.created_at), [t.category, t.note].filter(Boolean).join(" – "), t.party_name || "", t.kind === "sale" ? (PAY[t.category] || PAY.cash).replace(/^\S+ /, "") : "", (t.kind === "sale" ? "" : ["purchase", "expense", "driver_settle"].includes(t.kind) ? "-" : "") + num(t.amount).toFixed(3)]));
+    A.tx.filter((t) => inPeriod(t.date || t.created_at)).forEach((t) => rows.push([KINDS[t.kind].replace(/^\S+ /, ""), t.date || dayKey(t.created_at), [t.category, t.note].filter(Boolean).join(" – "), t.party_name || "", t.kind === "sale" ? (PAY[t.category] || PAY.cash).replace(/^\S+ /, "") : "", (t.kind === "supplier_paid" ? "سداد " : t.kind === "sale" ? "" : ["purchase", "expense", "driver_settle"].includes(t.kind) ? "-" : "") + num(t.amount).toFixed(3)]));
     const tracked = A.products.filter((p) => p.stock != null);
     if (tracked.length) {
       rows.push([], ["📦 المخزون الحالي"], ["المنتج", "الوحدة", "الكمية الموجودة", "حد التنبيه", "تكلفة الوحدة", "قيمة المخزون", "الحالة"]);
       let tv = 0;
       tracked.forEach((p) => { const v = Math.max(0, num(p.stock)) * num(p.cost); tv += v; rows.push([p.name_ar, p.unit_ar || "", fq(p.stock), fq(p.low_stock), p.cost != null ? num(p.cost).toFixed(3) : "", p.cost != null ? v.toFixed(3) : "", { ok: "متوفر", low: "قرب يخلص", out: "خلص" }[stockState(p)]]); });
       rows.push(["الإجمالي", "", "", "", "", tv.toFixed(3), ""]);
+    }
+    if ((A.sups || []).length) {
+      rows.push([], ["🚚 حسابات الموردين"], ["المورد", "الهاتف", "رصيد سابق", "إجمالي المشتريات", "إجمالي المدفوع", "عليك ليه"]);
+      let tb = 0; A.sups.forEach((x) => { const st = supStats(x.id); tb += st.bal; rows.push([x.name, x.phone || "", st.open.toFixed(3), st.bought.toFixed(3), st.paid.toFixed(3), st.bal.toFixed(3)]); });
+      rows.push(["الإجمالي", "", "", "", "", tb.toFixed(3)]);
     }
     const mv = (A.moves || []).filter((m) => inPeriod(m.created_at));
     if (mv.length) {
@@ -470,11 +550,16 @@
     const rb = $("resetBtn"); if (rb) rb.onclick = async () => { if (await UI.ask("مسح كل التعديلات والطلبات التجريبية؟")) { await Store.resetDemo(); await refresh(); toast("تم"); } };
   }
   document.addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx],[data-sf],[data-smv],[data-shist],[data-asub],[data-buy],[data-stockpick]"); if (!el || !A.me) return;
+    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx],[data-sf],[data-smv],[data-shist],[data-asub],[data-buy],[data-stockpick],[data-newsup],[data-supedit],[data-suppay],[data-supstmt],[data-supbuy]"); if (!el || !A.me) return;
     const d = el.dataset;
     try {
       if (d.tab) { A.tab = d.tab; render(); scrollTo(0, 0); }
       else if (d.stockpick !== undefined) stockPick();
+      else if (d.newsup !== undefined) { if (A.sups === null) return toast("شغّل suppliers.sql الأول", "err"); supSheet(null); }
+      else if (d.supedit) supSheet(d.supedit);
+      else if (d.suppay) supPaySheet(d.suppay);
+      else if (d.supstmt) supStmt(d.supstmt);
+      else if (d.supbuy) txSheet("purchase", { supplier: d.supbuy });
       else if (d.buy) txSheet("purchase", { product: d.buy });
       else if (d.asub) { closeSheet(); A.tab = "accounts"; A.asub = d.asub; render(); scrollTo(0, 0); }
       else if (d.sf) { A.sfilter = d.sf; render(); }

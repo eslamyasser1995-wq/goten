@@ -231,6 +231,19 @@
       if (LIVE) return chk(await sb.from("transactions").delete().eq("id", id));
       const d = db(); d.transactions = (d.transactions || []).filter((x) => x.id !== id); persist();
     },
+    // الموردين
+    async suppliers() {
+      if (LIVE) { const r = await sb.from("suppliers").select("*").order("name"); if (r.error) { console.warn(r.error.message); return null; } return r.data; }
+      return db().suppliers || [];
+    },
+    async saveSupplier(x) {
+      if (LIVE) { const r = { ...x }; if (!r.id) delete r.id; return chk(await sb.from("suppliers").upsert(r).select().single()); }
+      const d = db(); d.suppliers = d.suppliers || []; if (!x.id) { x = { ...x, id: uid(), created_at: nowISO() }; d.suppliers.push(x); } else Object.assign(d.suppliers.find((y) => y.id === x.id), x); persist(); return x;
+    },
+    async deleteSupplier(id) {
+      if (LIVE) return chk(await sb.from("suppliers").delete().eq("id", id));
+      const d = db(); d.suppliers = (d.suppliers || []).filter((x) => x.id !== id); (d.transactions || []).forEach((t) => { if (t.supplier_id === id) t.supplier_id = null; }); persist();
+    },
     async resetDemo() { if (!LIVE) { mem = seed(); persist(); } }
   };
   window.Store = Store;
