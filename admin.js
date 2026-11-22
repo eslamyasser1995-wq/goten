@@ -141,9 +141,10 @@
     A.tx.filter((t) => t.kind === "receivable_paid").forEach((t) => add(t.party, t.party_name, -num(t.amount)));
     return [...m.values()].filter((r) => Math.abs(r.bal) > 0.0005).sort((a, b) => b.bal - a.bal);
   }
-  const subTabs = () => `<div class="tabs" style="padding:10px 0 4px">${[["money", "💰 الحسابات"], ["stock", "📦 المخزون"]].map(([k, l]) => `<button style="background:${(A.asub || "money") === k ? "var(--tq)" : "#e2e8f0"};color:${(A.asub || "money") === k ? "#fff" : "#334155"};font-size:15px;padding:9px 18px" data-asub="${k}">${l}</button>`).join("")}</div>`;
+  const subTabs = () => `<div class="tabs" style="padding:10px 0 4px">${[["money", "💰 الحسابات"], ["stock", "📦 المخزون"], ["sups", "🚚 الموردين"]].map(([k, l]) => `<button style="background:${(A.asub || "money") === k ? "var(--tq)" : "#e2e8f0"};color:${(A.asub || "money") === k ? "#fff" : "#334155"};font-size:15px;padding:9px 18px" data-asub="${k}">${l}</button>`).join("")}</div>`;
   function accounts() {
     if (A.asub === "stock") return subTabs() + stock();
+    if (A.asub === "sups") return subTabs() + supsPage();
     return subTabs() + accountsMoney();
   }
   function accountsMoney() {
@@ -167,7 +168,7 @@
       <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" data-addtx="sale">🧾 + مبيعات</button><button class="btn tq sm" data-addtx="purchase">🛒 + مشتريات</button><button class="btn sm red" data-addtx="expense">💸 + مصروف</button><button class="btn sm green" data-addtx="income">💰 + إيراد</button><button class="btn sm" style="background:#7c3aed" data-stockpick>📦 + مخزون</button><button class="btn sm" style="background:#0f766e" data-newsup>🚚 + مورد</button><button class="btn ghost sm" data-export>📊 تصدير Excel</button></div>
       <div class="h2">🛵 كاش مع المناديب</div>
       ${dc.length ? dc.map((r) => `<div class="it" style="background:#fff;border-radius:14px;padding:10px;margin:8px 0;display:flex;align-items:center;gap:10px"><div class="t" style="flex:1"><b>${esc(r.d.full_name || "مندوب")}</b><div class="mut">حصّل ${money(r.got)} · سلّم ${money(r.paid)}</div></div><b style="color:${r.bal > 0 ? "#b45309" : "#16a34a"}">${money(r.bal)}</b>${r.bal > 0.0005 ? `<button class="btn sm green" data-settle="${r.d.id}">✅ استلمت</button>` : ""}</div>`).join("") : '<p class="mut">مفيش مناديب.</p>'}
-      ${supSection()}
+      ${supMini()}
       <div class="h2">📝 فلوس عند الزباين (آجل) <button class="btn ghost sm" data-addtx="receivable">+ آجل</button></div>
       ${rc.length ? rc.map((r) => `<div class="it" style="background:#fff;border-radius:14px;padding:10px;margin:8px 0;display:flex;align-items:center;gap:10px"><div class="t" style="flex:1"><b>${esc(r.name || "زبون")}</b><div class="mut">${esc(r.phone)}</div></div><b style="color:#b45309">${money(r.bal)}</b><button class="btn sm green" data-rpaid="${esc(r.phone)}">✅ دفع</button></div>`).join("") : '<p class="mut">مفيش فلوس آجل. علشان تسجّل طلب آجل، غيّر طريقة الدفع في الطلب لـ «📝 آجل».</p>'}
       <div class="h2">📒 سجل الحركات</div>
@@ -283,6 +284,21 @@
     const raw = $("tPaid") ? $("tPaid").value : "", paid = raw === "" ? amount : Math.min(amount, num(raw));
     if (paid > 0) await Store.saveTransaction({ kind: "supplier_paid", amount: paid, date: $("tDate").value || dayKey(new Date()), supplier_id: sup.id, party_name: sup.name, note: "دفعة مع الفاتورة" });
     return amount - paid;
+  }
+  function supMini() {
+    if (A.sups === null || !(A.sups || []).length) return "";
+    const total = A.sups.reduce((a, x) => a + Math.max(0, supBal(x.id)), 0);
+    return `<div class="notice" data-asub="sups" style="cursor:pointer;background:#ecfdf5;color:#065f46">🚚 عليك للموردين <b>${money(total)}</b> – اضغط للتفاصيل</div>`;
+  }
+  function supsPage() {
+    if (A.sups === null) return supSection();
+    const list = A.sups || [], owe = list.reduce((a, x) => a + Math.max(0, supBal(x.id)), 0);
+    const pt = A.tx.filter((t) => t.supplier_id && inPeriod(t.date || t.created_at));
+    return `<div class="filters">${PERIODS.map(([k, l]) => `<button class="${A.period === k ? "on" : ""}" data-period="${k}">${l}</button>`).join("")}</div>
+      <div class="stats"><div class="stat"><span class="mut">عدد الموردين</span><b>${list.length}</b></div><div class="stat"><span class="mut">عليك ليهم دلوقتي</span><b style="color:#dc2626">${money(owe)}</b></div>
+        <div class="stat"><span class="mut">اشتريت منهم في الفترة</span><b style="color:#b45309">${money(sum(pt.filter((t) => t.kind === "purchase")))}</b></div><div class="stat"><span class="mut">دفعتلهم في الفترة</span><b style="color:#16a34a">${money(sum(pt.filter((t) => t.kind === "supplier_paid")))}</b></div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0"><button class="btn sm" style="background:#0f766e" data-newsup>🚚 + مورد جديد</button><button class="btn tq sm" data-addtx="purchase">🛒 + مشتريات</button><button class="btn ghost sm" data-export>📊 تصدير Excel</button></div>
+      ${supSection()}`;
   }
   function supSection() {
     if (A.sups === null) return `<div class="h2">🚚 الموردين</div><div class="notice">شغّل ملف <b>suppliers.sql</b> في Supabase علشان تفعّل الموردين.</div>`;
