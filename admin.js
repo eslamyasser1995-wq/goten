@@ -4,7 +4,7 @@
   const C = window.ISLAMKO_CONFIG || {};
   const $ = (id) => document.getElementById(id);
   const A = { tx: [], period: "month", cq: "", cOnlyOpt: true, tab: "dash", me: null, orders: [], products: [], cats: [], banners: [], profiles: [], settings: {}, ofilter: "active", pq: "", bulk: false, known: null };
-  const TABS = [["dash", "📊 الرئيسية"], ["orders", "🧾 الطلبات"], ["accounts", "💰 الحسابات"], ["stock", "📦 المخزون"], ["products", "🐟 المنتجات"], ["cats", "🗂️ الأقسام"], ["banners", "🖼️ البنرات"], ["customers", "👥 الزباين"], ["team", "🛵 المناديب"], ["settings", "⚙️ الإعدادات"]];
+  const TABS = [["dash", "📊 الرئيسية"], ["orders", "🧾 الطلبات"], ["accounts", "💰 الحسابات"], ["products", "🐟 المنتجات"], ["cats", "🗂️ الأقسام"], ["banners", "🖼️ البنرات"], ["customers", "👥 الزباين"], ["team", "🛵 المناديب"], ["settings", "⚙️ الإعدادات"]];
   const drivers = () => A.profiles.filter((p) => p.role === "driver");
   const ctx = () => ({ products: A.products, cats: A.cats, banners: A.banners, done: refresh });
   const pname = (id) => (A.profiles.find((p) => p.id === id) || {}).full_name || "—";
@@ -36,7 +36,7 @@
 
   // ---------- الواجهة ----------
   function render() {
-    const body = { dash, orders, accounts, stock, products, cats, banners, customers, team, settings }[A.tab]();
+    const body = { dash, orders, accounts, products, cats, banners, customers, team, settings }[A.tab]();
     $("app").innerHTML = `<header class="top"><div class="wrap wide"><div class="row"><div class="brand">${LOGO}<div>لوحة التحكم<small>${esc(A.me.full_name || A.me.email || "")} ${Store.live ? "" : '· <span class="demo-tag">تجريبي</span>'}</small></div></div><div class="sp"></div>
       <button class="chip-btn" id="pushBtn">${UI.pushState() === "granted" ? "🔔" : "🔕 فعّل"}</button><a class="chip-btn" href="index.html" target="_blank" style="text-decoration:none">👁️</a><button class="chip-btn" id="outBtn">خروج</button></div>
       <div class="tabs">${TABS.map(([k, l]) => `<button class="${A.tab === k ? "on" : ""}" data-tab="${k}">${l}${k === "orders" && newCount() ? ` (${newCount()})` : ""}</button>`).join("")}</div></div></header>
@@ -53,7 +53,7 @@
     const rev = today.reduce((a, o) => a + num(o.total), 0);
     const active = A.orders.filter((o) => !["delivered", "cancelled"].includes(o.status));
     const lowN = A.products.filter((p) => p.stock != null && num(p.stock) <= num(p.low_stock)).length;
-    return `${lowN ? `<div class="notice" data-tab="stock" style="cursor:pointer">📦 فيه ${lowN} منتج قرب يخلص أو خلص – اضغط للمخزون</div>` : ""}<div class="h2">نظرة عامة</div><div class="stats">
+    return `${lowN ? `<div class="notice" data-asub="stock" style="cursor:pointer">📦 فيه ${lowN} منتج قرب يخلص أو خلص – اضغط للمخزون</div>` : ""}<div class="h2">نظرة عامة</div><div class="stats">
       <div class="stat"><span class="mut">طلبات اليوم</span><b>${today.length}</b></div><div class="stat"><span class="mut">مبيعات اليوم</span><b>${money(rev)}</b></div>
       <div class="stat"><span class="mut">طلبات جديدة</span><b style="color:${STATUS.new.c}">${newCount()}</b></div><div class="stat"><span class="mut">طلبات جارية</span><b>${active.length}</b></div></div>
       <div class="h2">إجراءات سريعة</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn tq" data-newprod>+ منتج جديد</button><button class="btn" data-tab="orders">إدارة الطلبات</button><button class="btn ghost" data-storeopen>${A.settings.store_open ? "⛔ إغلاق المتجر مؤقتاً" : "✅ فتح المتجر"}</button></div>
@@ -141,7 +141,12 @@
     A.tx.filter((t) => t.kind === "receivable_paid").forEach((t) => add(t.party, t.party_name, -num(t.amount)));
     return [...m.values()].filter((r) => Math.abs(r.bal) > 0.0005).sort((a, b) => b.bal - a.bal);
   }
+  const subTabs = () => `<div class="tabs" style="padding:10px 0 4px">${[["money", "💰 الحسابات"], ["stock", "📦 المخزون"]].map(([k, l]) => `<button style="background:${(A.asub || "money") === k ? "var(--tq)" : "#e2e8f0"};color:${(A.asub || "money") === k ? "#fff" : "#334155"};font-size:15px;padding:9px 18px" data-asub="${k}">${l}</button>`).join("")}</div>`;
   function accounts() {
+    if (A.asub === "stock") return subTabs() + stock();
+    return subTabs() + accountsMoney();
+  }
+  function accountsMoney() {
     const ords = A.orders.filter((o) => o.status === "delivered" && inPeriod(o.created_at));
     const pending = A.orders.filter((o) => !["delivered", "cancelled"].includes(o.status) && inPeriod(o.created_at));
     const tx = A.tx.filter((t) => inPeriod(t.date || t.created_at));
@@ -187,7 +192,7 @@
       <input class="in" id="sq" placeholder="🔍 دوّر على منتج" value="${esc(q)}" style="margin:6px 0">
       <div class="list">${list.map((p) => { const st = stockState(p); return `<div class="it" style="flex-wrap:wrap;border-inline-start:4px solid ${SC[st][0]}">
         ${p.image ? `<img src="${esc(p.image)}" alt="">` : ""}<div class="t"><b>${esc(p.name_ar)}</b><span class="mut">${st === "off" ? "مش متتبَّع" : `<b style="display:inline;color:${SC[st][0]};font-size:18px">${fq(p.stock)}</b> ${esc(p.unit_ar || "")} · ${SC[st][1]}${num(p.low_stock) ? ` · تنبيه عند ${fq(p.low_stock)}` : ""}${p.cost != null ? ` · تكلفة ${money(p.cost)}` : ""}`}</span></div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;width:100%">${st === "off" ? `<button class="btn sm tq" data-smv="count:${p.id}">▶️ ابدأ تتبّع المخزون</button>` : `<button class="btn sm tq" data-smv="purchase:${p.id}">➕ شراء</button><button class="btn sm ghost" data-smv="waste:${p.id}">➖ تالف</button><button class="btn sm ghost" data-smv="count:${p.id}">📝 جرد</button><button class="btn sm ghost" data-shist="${p.id}">📜 الحركات</button>`}</div></div>`; }).join("") || '<p class="mut">مفيش منتجات هنا.</p>'}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;width:100%">${st === "off" ? `<button class="btn sm tq" data-smv="count:${p.id}">▶️ ابدأ تتبّع المخزون</button>` : `<button class="btn sm tq" data-buy="${p.id}">➕ شراء</button><button class="btn sm ghost" data-smv="waste:${p.id}">➖ تالف</button><button class="btn sm ghost" data-smv="count:${p.id}">📝 جرد</button><button class="btn sm ghost" data-shist="${p.id}">📜 الحركات</button>`}</div></div>`; }).join("") || '<p class="mut">مفيش منتجات هنا.</p>'}</div>
       <div class="h2">آخر الحركات</div><div class="card">${(A.moves || []).slice(0, 25).map(mvLine).join("") || '<p class="mut">لسه مفيش حركات.</p>'}</div>`;
   }
   function mvLine(m) { return `<div class="line"><span>${MV[m.kind] || m.kind} · ${esc(m.product_name || "")}<br><small class="mut">${fmtDate(m.created_at)}${m.note ? " · " + esc(m.note) : ""}${m.cost ? " · " + money(m.cost) : ""}</small></span><b style="color:${num(m.qty) >= 0 ? "#16a34a" : "#dc2626"};direction:ltr">${num(m.qty) > 0 ? "+" : ""}${fq(m.qty)}${m.balance != null ? ` <small class="mut">= ${fq(m.balance)}</small>` : ""}</b></div>`; }
@@ -220,7 +225,9 @@
     const isRec = kind === "receivable" || kind === "receivable_paid";
     sheet(`<h3>${KINDS[kind]}</h3>
       ${kind === "expense" ? `<label class="f"><span>النوع</span><select class="in" id="tCat">${EXP_CATS.map((c) => `<option>${c}</option>`).join("")}</select></label>` : ""}
-      ${kind === "purchase" ? `<div class="row2"><label class="f"><span>الصنف</span><input class="in" id="tCat" placeholder="زبيدي، روبيان..."></label><label class="f"><span>المورد (اختياري)</span><input class="in" id="tParty" placeholder="اسم التاجر"></label></div>` : ""}
+      ${kind === "purchase" ? `<label class="f"><span>المنتج (بيزوّد المخزون)</span><select class="in" id="tProd"><option value="">— حاجة تانية مش منتج (ثلج، أكياس...) —</option>${A.products.map((p) => `<option value="${p.id}" ${preset.product === p.id ? "selected" : ""}>${esc(p.name_ar)}${p.stock != null ? ` (موجود ${fq(p.stock)})` : ""}</option>`).join("")}</select></label>
+        <div class="row2"><label class="f" id="tQtyW"><span>الكمية *</span><input class="in" id="tQty" type="number" step="0.25" min="0" inputmode="decimal" placeholder="كام كيلو / حبة"></label><label class="f" id="tCatW"><span>الصنف</span><input class="in" id="tCat" placeholder="ثلج، أكياس..."></label></div>
+        <label class="f"><span>المورد (اختياري)</span><input class="in" id="tParty" placeholder="اسم التاجر"></label>` : ""}
       ${kind === "sale" ? `<label class="f"><span>اتباع إيه؟</span><input class="in" id="tDesc" placeholder="مثال: 2 كيلو زبيدي – بيع في المحل"></label>
         <label class="f"><span>طريقة الدفع</span><select class="in" id="tPay">${Object.entries(PAY).map(([k, v]) => `<option value="${k}">${v}</option>`).join("")}</select></label>
         <div class="row2"><label class="f"><span>اسم الزبون (اختياري)</span><input class="in" id="tPName"></label><label class="f"><span>رقمه (لازم لو آجل)</span><input class="in" id="tPhone" type="tel" inputmode="tel"></label></div>` : ""}
@@ -229,8 +236,21 @@
       <div class="row2"><label class="f"><span>المبلغ (د.ك) *</span><input class="in" id="tAmt" type="number" step="0.005" min="0" inputmode="decimal" value="${preset.amount != null ? num(preset.amount).toFixed(3) : ""}"></label><label class="f"><span>التاريخ</span><input class="in" id="tDate" type="date" value="${dayKey(new Date())}"></label></div>
       <label class="f"><span>ملاحظة</span><input class="in" id="tNote" value="${esc(preset.note || "")}"></label>
       <button class="btn tq block" id="tSave">💾 حفظ</button>`, () => {
+      const tp = $("tProd");
+      if (tp) { const sync = () => { const on = !!tp.value; $("tQtyW").style.display = on ? "" : "none"; $("tCatW").style.display = on ? "none" : ""; }; tp.onchange = sync; sync(); }
       $("tSave").onclick = async () => {
         const amount = num($("tAmt").value); if (!(amount > 0)) return toast("اكتب المبلغ", "err");
+        if (tp && tp.value) {
+          const qty = num($("tQty").value); if (!(qty > 0)) return toast("اكتب الكمية", "err");
+          const pr = A.products.find((x) => x.id === tp.value), party = $("tParty").value.trim(), note = $("tNote").value.trim();
+          try {
+            $("tSave").disabled = true;
+            await Store.stockMove({ product_id: pr.id, kind: "purchase", qty, cost: amount, note: [party ? "من " + party : "", note].filter(Boolean).join(" – ") || null });
+            await Store.saveTransaction({ kind: "purchase", amount, date: $("tDate").value || dayKey(new Date()), category: pr.name_ar, note: [fq(qty) + " " + (pr.unit_ar || ""), note].filter(Boolean).join(" – "), party_name: party || null });
+            closeSheet(); toast(`اتسجّل ✓ – المخزون زاد ${fq(qty)}`); await refresh();
+          } catch (e) { $("tSave").disabled = false; toast(/stock_move|function/.test(e.message) ? "شغّل inventory.sql الأول" : e.message, "err"); }
+          return;
+        }
         const row = { kind, amount, date: $("tDate").value || dayKey(new Date()), note: $("tNote").value.trim() || null, category: $("tCat") ? $("tCat").value.trim() || null : null, party: preset.party || null, party_name: preset.party_name || null };
         if (kind === "purchase" && $("tParty").value.trim()) row.party_name = $("tParty").value.trim();
         if (kind === "sale") {
@@ -429,10 +449,12 @@
     const rb = $("resetBtn"); if (rb) rb.onclick = async () => { if (await UI.ask("مسح كل التعديلات والطلبات التجريبية؟")) { await Store.resetDemo(); await refresh(); toast("تم"); } };
   }
   document.addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx],[data-sf],[data-smv],[data-shist]"); if (!el || !A.me) return;
+    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx],[data-sf],[data-smv],[data-shist],[data-asub],[data-buy]"); if (!el || !A.me) return;
     const d = el.dataset;
     try {
       if (d.tab) { A.tab = d.tab; render(); scrollTo(0, 0); }
+      else if (d.buy) txSheet("purchase", { product: d.buy });
+      else if (d.asub) { A.tab = "accounts"; A.asub = d.asub; render(); scrollTo(0, 0); }
       else if (d.sf) { A.sfilter = d.sf; render(); }
       else if (d.smv) { const [k, id] = d.smv.split(":"); stockSheet(k, id); }
       else if (d.shist) { const p = A.products.find((x) => x.id === d.shist); sheet(`<h3>📜 حركات ${esc(p.name_ar)}</h3>${(A.moves || []).filter((m) => m.product_id === p.id).map(mvLine).join("") || '<p class="mut">لسه مفيش حركات.</p>'}`); }
