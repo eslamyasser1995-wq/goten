@@ -109,7 +109,7 @@
   }
   // ---------- الحسابات ----------
   const PAY = { cash: "💵 كاش", knet_on_delivery: "💳 كي نت", credit: "📝 آجل" };
-  const KINDS = { purchase: "🛒 مشتريات", expense: "💸 مصروف", income: "💰 إيراد آخر", driver_settle: "🛵 استلام من مندوب", receivable: "📝 آجل يدوي", receivable_paid: "✅ سداد آجل" };
+  const KINDS = { sale: "🧾 مبيعات خارج التطبيق", purchase: "🛒 مشتريات", expense: "💸 مصروف", income: "💰 إيراد آخر", driver_settle: "🛵 استلام من مندوب", receivable: "📝 آجل يدوي", receivable_paid: "✅ سداد آجل" };
   const EXP_CATS = ["بنزين ومواصلات", "رواتب", "إيجار", "كهرباء وماء", "تغليف وثلج", "صيانة", "إعلانات", "أخرى"];
   const PERIODS = [["today", "اليوم"], ["week", "الأسبوع"], ["month", "الشهر"], ["lastmonth", "الشهر اللي فات"], ["all", "الكل"]];
   const dayKey = (d) => { const x = new Date(d); return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0"); };
@@ -134,6 +134,7 @@
     const m = new Map();
     const add = (phone, name, v) => { const r = m.get(phone) || { phone, name, bal: 0 }; r.bal += v; if (name) r.name = name; m.set(phone, r); };
     A.orders.filter((o) => o.payment === "credit" && o.status !== "cancelled").forEach((o) => add(o.phone, o.customer_name, num(o.total)));
+    A.tx.filter((t) => t.kind === "sale" && t.category === "credit" && t.party).forEach((t) => add(t.party, t.party_name, num(t.amount)));
     A.tx.filter((t) => t.kind === "receivable").forEach((t) => add(t.party, t.party_name, num(t.amount)));
     A.tx.filter((t) => t.kind === "receivable_paid").forEach((t) => add(t.party, t.party_name, -num(t.amount)));
     return [...m.values()].filter((r) => Math.abs(r.bal) > 0.0005).sort((a, b) => b.bal - a.bal);
@@ -142,26 +143,27 @@
     const ords = A.orders.filter((o) => o.status === "delivered" && inPeriod(o.created_at));
     const pending = A.orders.filter((o) => !["delivered", "cancelled"].includes(o.status) && inPeriod(o.created_at));
     const tx = A.tx.filter((t) => inPeriod(t.date || t.created_at));
-    const sales = sum(ords, (o) => o.total), fees = sum(ords, (o) => o.delivery_fee);
+    const manual = tx.filter((t) => t.kind === "sale");
+    const sales = sum(ords, (o) => o.total) + sum(manual), fees = sum(ords, (o) => o.delivery_fee);
     const purch = sum(tx.filter((t) => t.kind === "purchase")), exp = sum(tx.filter((t) => t.kind === "expense")), inc = sum(tx.filter((t) => t.kind === "income"));
     const profit = sales + inc - purch - exp;
-    const byPay = Object.keys(PAY).map((k) => [k, sum(ords.filter((o) => (o.payment || "cash") === k), (o) => o.total)]);
+    const byPay = Object.keys(PAY).map((k) => [k, sum(ords.filter((o) => (o.payment || "cash") === k), (o) => o.total) + sum(manual.filter((t) => (t.category || "cash") === k))]);
     const byCat = {}; tx.filter((t) => t.kind === "expense").forEach((t) => { byCat[t.category || "أخرى"] = (byCat[t.category || "أخرى"] || 0) + num(t.amount); });
     const dc = driverCash(), rc = receivables();
     const stat = (l, v, c) => `<div class="stat"><span class="mut">${l}</span><b style="${c ? "color:" + c : ""}">${v}</b></div>`;
     return `<div class="filters">${PERIODS.map(([k, l]) => `<button class="${A.period === k ? "on" : ""}" data-period="${k}">${l}</button>`).join("")}</div>
-      <div class="stats">${stat("المبيعات (" + ords.length + " طلب)", money(sales))}${stat("المشتريات", money(purch), "#b45309")}${stat("المصاريف", money(exp), "#dc2626")}${stat("صافي الربح", money(profit), profit >= 0 ? "#16a34a" : "#dc2626")}</div>
-      <div class="card"><div class="line"><span>منها رسوم توصيل</span><b>${money(fees)}</b></div>${inc ? `<div class="line"><span>إيرادات أخرى</span><b>${money(inc)}</b></div>` : ""}
+      <div class="stats">${stat("المبيعات (" + ords.length + " طلب" + (manual.length ? " + " + manual.length + " يدوي" : "") + ")", money(sales))}${stat("المشتريات", money(purch), "#b45309")}${stat("المصاريف", money(exp), "#dc2626")}${stat("صافي الربح", money(profit), profit >= 0 ? "#16a34a" : "#dc2626")}</div>
+      <div class="card"><div class="line"><span>من التطبيق</span><b>${money(sales - sum(manual))}</b></div><div class="line"><span>خارج التطبيق</span><b>${money(sum(manual))}</b></div><div class="line"><span>منها رسوم توصيل</span><b>${money(fees)}</b></div>${inc ? `<div class="line"><span>إيرادات أخرى</span><b>${money(inc)}</b></div>` : ""}
         ${byPay.map(([k, v]) => `<div class="line"><span>${PAY[k]}</span><b>${money(v)}</b></div>`).join("")}
         ${pending.length ? `<div class="line mut"><span>طلبات لسه ماتوصّلتش (${pending.length})</span><span>${money(sum(pending, (o) => o.total))}</span></div>` : ""}
         ${Object.keys(byCat).length ? `<div class="mut" style="margin-top:8px"><b>المصاريف حسب النوع:</b></div>${Object.entries(byCat).map(([k, v]) => `<div class="line"><span>${esc(k)}</span><span>${money(v)}</span></div>`).join("")}` : ""}</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn tq sm" data-addtx="purchase">🛒 + مشتريات</button><button class="btn sm red" data-addtx="expense">💸 + مصروف</button><button class="btn sm green" data-addtx="income">💰 + إيراد</button><button class="btn ghost sm" data-export>📊 تصدير Excel</button></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" data-addtx="sale">🧾 + مبيعات</button><button class="btn tq sm" data-addtx="purchase">🛒 + مشتريات</button><button class="btn sm red" data-addtx="expense">💸 + مصروف</button><button class="btn sm green" data-addtx="income">💰 + إيراد</button><button class="btn ghost sm" data-export>📊 تصدير Excel</button></div>
       <div class="h2">🛵 كاش مع المناديب</div>
       ${dc.length ? dc.map((r) => `<div class="it" style="background:#fff;border-radius:14px;padding:10px;margin:8px 0;display:flex;align-items:center;gap:10px"><div class="t" style="flex:1"><b>${esc(r.d.full_name || "مندوب")}</b><div class="mut">حصّل ${money(r.got)} · سلّم ${money(r.paid)}</div></div><b style="color:${r.bal > 0 ? "#b45309" : "#16a34a"}">${money(r.bal)}</b>${r.bal > 0.0005 ? `<button class="btn sm green" data-settle="${r.d.id}">✅ استلمت</button>` : ""}</div>`).join("") : '<p class="mut">مفيش مناديب.</p>'}
       <div class="h2">📝 فلوس عند الزباين (آجل) <button class="btn ghost sm" data-addtx="receivable">+ آجل</button></div>
       ${rc.length ? rc.map((r) => `<div class="it" style="background:#fff;border-radius:14px;padding:10px;margin:8px 0;display:flex;align-items:center;gap:10px"><div class="t" style="flex:1"><b>${esc(r.name || "زبون")}</b><div class="mut">${esc(r.phone)}</div></div><b style="color:#b45309">${money(r.bal)}</b><button class="btn sm green" data-rpaid="${esc(r.phone)}">✅ دفع</button></div>`).join("") : '<p class="mut">مفيش فلوس آجل. علشان تسجّل طلب آجل، غيّر طريقة الدفع في الطلب لـ «📝 آجل».</p>'}
       <div class="h2">📒 سجل الحركات</div>
-      <div class="list">${tx.length ? [...tx].sort((x, y) => new Date(y.date || y.created_at) - new Date(x.date || x.created_at)).map((t) => `<div class="it"><div class="t"><b>${KINDS[t.kind] || t.kind}${t.category ? " · " + esc(t.category) : ""}</b><span class="mut">${esc(t.date || dayKey(t.created_at))}${t.party_name ? " · " + esc(t.party_name) : ""}${t.note ? " · " + esc(t.note) : ""}</span></div><b>${money(t.amount)}</b><button class="btn sm ghost" data-deltx="${t.id}">🗑️</button></div>`).join("") : '<p class="mut">مفيش حركات في الفترة دي.</p>'}</div>`;
+      <div class="list">${tx.length ? [...tx].sort((x, y) => new Date(y.date || y.created_at) - new Date(x.date || x.created_at)).map((t) => `<div class="it"><div class="t"><b>${KINDS[t.kind] || t.kind}${t.kind === "sale" ? " · " + (PAY[t.category] || PAY.cash) : t.category ? " · " + esc(t.category) : ""}</b><span class="mut">${esc(t.date || dayKey(t.created_at))}${t.party_name ? " · " + esc(t.party_name) : ""}${t.note ? " · " + esc(t.note) : ""}</span></div><b>${money(t.amount)}</b><button class="btn sm ghost" data-deltx="${t.id}">🗑️</button></div>`).join("") : '<p class="mut">مفيش حركات في الفترة دي.</p>'}</div>`;
   }
   function txSheet(kind, preset) {
     preset = preset || {};
@@ -169,6 +171,9 @@
     sheet(`<h3>${KINDS[kind]}</h3>
       ${kind === "expense" ? `<label class="f"><span>النوع</span><select class="in" id="tCat">${EXP_CATS.map((c) => `<option>${c}</option>`).join("")}</select></label>` : ""}
       ${kind === "purchase" ? `<div class="row2"><label class="f"><span>الصنف</span><input class="in" id="tCat" placeholder="زبيدي، روبيان..."></label><label class="f"><span>المورد (اختياري)</span><input class="in" id="tParty" placeholder="اسم التاجر"></label></div>` : ""}
+      ${kind === "sale" ? `<label class="f"><span>اتباع إيه؟</span><input class="in" id="tDesc" placeholder="مثال: 2 كيلو زبيدي – بيع في المحل"></label>
+        <label class="f"><span>طريقة الدفع</span><select class="in" id="tPay">${Object.entries(PAY).map(([k, v]) => `<option value="${k}">${v}</option>`).join("")}</select></label>
+        <div class="row2"><label class="f"><span>اسم الزبون (اختياري)</span><input class="in" id="tPName"></label><label class="f"><span>رقمه (لازم لو آجل)</span><input class="in" id="tPhone" type="tel" inputmode="tel"></label></div>` : ""}
       ${kind === "income" ? `<label class="f"><span>البيان</span><input class="in" id="tCat" placeholder="مثال: بيع جملة"></label>` : ""}
       ${isRec ? `<div class="row2"><label class="f"><span>اسم الزبون</span><input class="in" id="tPName" value="${esc(preset.name || "")}"></label><label class="f"><span>الرقم</span><input class="in" id="tPhone" type="tel" value="${esc(preset.phone || "")}" ${preset.phone ? "readonly" : ""}></label></div>` : ""}
       <div class="row2"><label class="f"><span>المبلغ (د.ك) *</span><input class="in" id="tAmt" type="number" step="0.005" min="0" inputmode="decimal" value="${preset.amount != null ? num(preset.amount).toFixed(3) : ""}"></label><label class="f"><span>التاريخ</span><input class="in" id="tDate" type="date" value="${dayKey(new Date())}"></label></div>
@@ -178,6 +183,12 @@
         const amount = num($("tAmt").value); if (!(amount > 0)) return toast("اكتب المبلغ", "err");
         const row = { kind, amount, date: $("tDate").value || dayKey(new Date()), note: $("tNote").value.trim() || null, category: $("tCat") ? $("tCat").value.trim() || null : null, party: preset.party || null, party_name: preset.party_name || null };
         if (kind === "purchase" && $("tParty").value.trim()) row.party_name = $("tParty").value.trim();
+        if (kind === "sale") {
+          row.category = $("tPay").value; const desc = $("tDesc").value.trim(); row.note = [desc, row.note].filter(Boolean).join(" – ") || null;
+          const ph = ($("tPhone").value || "").replace(/\D/g, ""); row.party_name = $("tPName").value.trim() || null;
+          if (ph) row.party = /^[124569]\d{7}$/.test(ph) ? "965" + ph : ph;
+          if (row.category === "credit" && !row.party) return toast("البيع الآجل محتاج رقم الزبون", "err");
+        }
         if (isRec) { const ph = ($("tPhone").value || "").replace(/\D/g, ""); if (!ph) return toast("اكتب رقم الزبون", "err"); row.party = /^[124569]\d{7}$/.test(ph) ? "965" + ph : ph; row.party_name = $("tPName").value.trim() || null; }
         try { $("tSave").disabled = true; await Store.saveTransaction(row); closeSheet(); toast("اتسجّل ✓"); await refresh(); } catch (e) { toast(e.message.includes("transactions") ? "شغّل كود SQL بتاع الحسابات الأول" : e.message, "err"); $("tSave").disabled = false; }
       };
@@ -186,7 +197,7 @@
   function exportCsv() {
     const rows = [["النوع", "التاريخ", "البيان", "الطرف", "طريقة الدفع", "المبلغ"]];
     A.orders.filter((o) => o.status === "delivered" && inPeriod(o.created_at)).forEach((o) => rows.push(["مبيعات – طلب #" + o.order_no, dayKey(o.created_at), (o.items || []).map((i) => i.name_ar + " ×" + i.qty).join(" + "), o.customer_name + " " + o.phone, PAY[o.payment || "cash"].replace(/^\S+ /, ""), num(o.total).toFixed(3)]));
-    A.tx.filter((t) => inPeriod(t.date || t.created_at)).forEach((t) => rows.push([KINDS[t.kind].replace(/^\S+ /, ""), t.date || dayKey(t.created_at), [t.category, t.note].filter(Boolean).join(" – "), t.party_name || "", "", (["purchase", "expense", "driver_settle"].includes(t.kind) ? "-" : "") + num(t.amount).toFixed(3)]));
+    A.tx.filter((t) => inPeriod(t.date || t.created_at)).forEach((t) => rows.push([KINDS[t.kind].replace(/^\S+ /, ""), t.date || dayKey(t.created_at), [t.category, t.note].filter(Boolean).join(" – "), t.party_name || "", t.kind === "sale" ? (PAY[t.category] || PAY.cash).replace(/^\S+ /, "") : "", (t.kind === "sale" ? "" : ["purchase", "expense", "driver_settle"].includes(t.kind) ? "-" : "") + num(t.amount).toFixed(3)]));
     const csv = "﻿" + rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\r\n");
     const label = (PERIODS.find((p) => p[0] === A.period) || [, ""])[1];
     const file = new File([csv], `goten-حسابات-${label}-${dayKey(new Date())}.csv`, { type: "text/csv" });
