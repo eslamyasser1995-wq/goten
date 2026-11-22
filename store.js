@@ -69,6 +69,13 @@
   const upsertArr = (arr, row) => { if (!row.id) row.id = uid(); const i = arr.findIndex((x) => x.id === row.id); if (i >= 0) arr[i] = { ...arr[i], ...row }; else arr.push(row); persist(); return row; };
   const bySort = (a, b) => (a.sort || 0) - (b.sort || 0);
 
+  // ---------- مخزون (تجريبي – نفس منطق قاعدة البيانات) ----------
+  function demoStock(pid, delta, kind, oid, note, cost) {
+    const d = db(), pr = d.products.find((x) => x.id === pid); if (!pr || pr.stock == null) return;
+    pr.stock = Math.round((Number(pr.stock) + delta) * 1000) / 1000; pr.in_stock = pr.stock > 0;
+    d.stock_moves = d.stock_moves || []; d.stock_moves.unshift({ id: uid(), product_id: pid, product_name: pr.name_ar, kind, qty: delta, balance: pr.stock, cost: cost || null, order_id: oid || null, note: note || null, created_at: nowISO() });
+  }
+  function demoOrderStock(o, sign, kind, note) { (o.items || []).forEach((it) => demoStock(it.id, sign * Number(it.qty), kind, o.id, note + o.order_no)); }
   function demoPlace(p) {
     const d = db(), s = d.settings;
     if (!s.store_open) throw new Error("STORE_CLOSED");
@@ -77,6 +84,7 @@
       const pr = d.products.find((x) => x.id === it.id && x.active && x.in_stock);
       if (!pr) throw new Error("PRODUCT_UNAVAILABLE");
       const q = Math.max(1, Math.min(99, parseInt(it.qty) || 1));
+      if (pr.stock != null && Number(pr.stock) < q) throw new Error("OUT_OF_STOCK:" + pr.name_ar);
       items.push({ id: pr.id, name_ar: pr.name_ar, name_en: pr.name_en, price: pr.price, qty: q, unit_ar: pr.unit_ar, image: pr.image });
       sub += pr.price * q;
     }
@@ -84,7 +92,7 @@
     if (sub < (s.min_order || 0)) throw new Error("MIN_ORDER");
     const fee = s.free_delivery_over && sub >= s.free_delivery_over ? 0 : Number(s.delivery_fee || 0);
     const o = { ...p, id: uid(), order_no: d.nextNo++, items, subtotal: sub, delivery_fee: fee, total: sub + fee, status: "new", driver_id: null, created_at: nowISO(), updated_at: nowISO() };
-    d.orders.unshift(o); persist();
+    d.orders.unshift(o); demoOrderStock(o, -1, "sale", "طلب #"); persist();
     return { id: o.id, order_no: o.order_no, total: o.total };
   }
 
@@ -112,7 +120,7 @@
     async deleteCategory(id) { if (LIVE) return chk(await sb.from("categories").delete().eq("id", id)); const d = db(); d.categories = d.categories.filter((x) => x.id !== id); d.products.forEach((p) => { if (p.category_id === id) p.category_id = null; }); persist(); },
 
     async products() { return LIVE ? chk(await sb.from("products").select("*").order("sort").order("created_at", { ascending: false })) : [...db().products].sort(bySort); },
-    async saveProduct(p) { if (LIVE) { const r = { ...p }; if (!r.id) delete r.id; return chk(await sb.from("products").upsert(r).select().single()); } if (!p.created_at) p.created_at = nowISO(); return upsertArr(db().products, p); },
+    async saveProduct(p) { if (LIVE) { const r = { ...p }; if (!r.id) delete r.id; delete r.stock; return chk(await sb.from("products").upsert(r).select().single()); } if (!p.created_at) p.created_at = nowISO(); const ex = p.id && db().products.find((x) => x.id === p.id); if (ex) p = { ...p, stock: ex.stock }; return upsertArr(db().products, p); },
     async deleteProduct(id) { if (LIVE) return chk(await sb.from("products").delete().eq("id", id)); const d = db(); d.products = d.products.filter((x) => x.id !== id); persist(); },
 
     async banners() { return LIVE ? chk(await sb.from("banners").select("*").order("sort")) : [...db().banners].sort(bySort); },
@@ -137,14 +145,27 @@
       return { ...o, driver_name: dr && dr.full_name, driver_phone: dr && dr.phone };
     },
     async orders() { return LIVE ? chk(await sb.from("orders").select("*").order("created_at", { ascending: false }).limit(300)) : db().orders; },
-    async updateOrder(id, patch) { patch = { ...patch, updated_at: nowISO() }; if (LIVE) return chk(await sb.from("orders").update(patch).eq("id", id)); const o = db().orders.find((x) => x.id === id); Object.assign(o, patch); persist(); },
+    async updateOrder(id, patch) { patch = { ...patch, updated_at: nowISO() }; if (LIVE) return chk(await sb.from("orders").update(patch).eq("id", id)); const o = db().orders.find((x) => x.id === id); const was = o.status; Object.assign(o, patch); if (patch.status === "cancelled" && was !== "cancelled") demoOrderStock(o, 1, "return", "إلغاء طلب #"); else if (patch.status && was === "cancelled" && patch.status !== "cancelled") demoOrderStock(o, -1, "sale", "رجوع طلب #"); persist(); },
     async deleteOrder(id) {
       if (LIVE) return chk(await sb.from("orders").delete().eq("id", id));
-      const d = db(); d.orders = d.orders.filter((o) => o.id !== id); persist();
+      const d = db(), o = d.orders.find((x) => x.id === id); if (o && o.status !== "cancelled") demoOrderStock(o, 1, "return", "حذف طلب #"); d.orders = d.orders.filter((x) => x.id !== id); persist();
     },
     async deleteAllOrders() {
       if (LIVE) return chk(await sb.from("orders").delete().not("id", "is", null));
-      db().orders = []; persist();
+      const d = db(); d.orders.forEach((o) => { if (o.status !== "cancelled") demoOrderStock(o, 1, "return", "حذف طلب #"); }); d.orders = []; persist();
+    },
+    async stockMoves() {
+      if (LIVE) { const r = await sb.from("stock_moves").select("*").order("created_at", { ascending: false }).limit(1000); if (r.error) { console.warn(r.error.message); return null; } return r.data; }
+      return db().stock_moves || [];
+    },
+    async stockMove(m) {
+      if (LIVE) return chk(await sb.rpc("stock_move", { p: m }));
+      const d = db(), pr = d.products.find((x) => x.id === m.product_id); if (!pr) throw new Error("NO_PRODUCT");
+      if (pr.stock == null) pr.stock = 0;
+      const q = Number(m.qty) || 0, delta = m.kind === "purchase" ? Math.abs(q) : m.kind === "waste" ? -Math.abs(q) : q - Number(pr.stock);
+      demoStock(pr.id, delta, m.kind, null, m.note, m.cost ? Number(m.cost) : null);
+      if (m.kind === "purchase" && Number(m.cost) > 0 && q) pr.cost = Math.round((Number(m.cost) / Math.abs(q)) * 1000) / 1000;
+      persist(); return { stock: pr.stock };
     },
     async driverOrders() {
       const me = await this.me(); if (!me) return [];

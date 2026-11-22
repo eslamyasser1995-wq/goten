@@ -4,7 +4,7 @@
   const C = window.ISLAMKO_CONFIG || {};
   const $ = (id) => document.getElementById(id);
   const A = { tx: [], period: "month", cq: "", cOnlyOpt: true, tab: "dash", me: null, orders: [], products: [], cats: [], banners: [], profiles: [], settings: {}, ofilter: "active", pq: "", bulk: false, known: null };
-  const TABS = [["dash", "📊 الرئيسية"], ["orders", "🧾 الطلبات"], ["accounts", "💰 الحسابات"], ["products", "🐟 المنتجات"], ["cats", "🗂️ الأقسام"], ["banners", "🖼️ البنرات"], ["customers", "👥 الزباين"], ["team", "🛵 المناديب"], ["settings", "⚙️ الإعدادات"]];
+  const TABS = [["dash", "📊 الرئيسية"], ["orders", "🧾 الطلبات"], ["accounts", "💰 الحسابات"], ["stock", "📦 المخزون"], ["products", "🐟 المنتجات"], ["cats", "🗂️ الأقسام"], ["banners", "🖼️ البنرات"], ["customers", "👥 الزباين"], ["team", "🛵 المناديب"], ["settings", "⚙️ الإعدادات"]];
   const drivers = () => A.profiles.filter((p) => p.role === "driver");
   const ctx = () => ({ products: A.products, cats: A.cats, banners: A.banners, done: refresh });
   const pname = (id) => (A.profiles.find((p) => p.id === id) || {}).full_name || "—";
@@ -26,8 +26,8 @@
   }
 
   async function loadAll() {
-    const [o, p, c, b, pr, s, ic, tx] = await Promise.all([Store.orders(), Store.products(), Store.categories(), Store.banners(), Store.profiles(), Store.settings(), Store.importedCustomers().catch(() => []), Store.transactions().catch(() => [])]);
-    Object.assign(A, { orders: o, products: p, cats: c, banners: b, profiles: pr, settings: s || {}, imported: ic || [], tx: tx || [] });
+    const [o, p, c, b, pr, s, ic, tx, mv] = await Promise.all([Store.orders(), Store.products(), Store.categories(), Store.banners(), Store.profiles(), Store.settings(), Store.importedCustomers().catch(() => []), Store.transactions().catch(() => []), Store.stockMoves().catch(() => null)]);
+    Object.assign(A, { orders: o, products: p, cats: c, banners: b, profiles: pr, settings: s || {}, imported: ic || [], tx: tx || [], moves: mv });
     const ids = new Set(o.map((x) => x.id));
     if (A.known) { const fresh = o.filter((x) => !A.known.has(x.id)); if (fresh.length) { beep(); toast(`🔔 طلب جديد #${fresh[0].order_no}`); } }
     A.known = ids;
@@ -36,7 +36,7 @@
 
   // ---------- الواجهة ----------
   function render() {
-    const body = { dash, orders, accounts, products, cats, banners, customers, team, settings }[A.tab]();
+    const body = { dash, orders, accounts, stock, products, cats, banners, customers, team, settings }[A.tab]();
     $("app").innerHTML = `<header class="top"><div class="wrap wide"><div class="row"><div class="brand">${LOGO}<div>لوحة التحكم<small>${esc(A.me.full_name || A.me.email || "")} ${Store.live ? "" : '· <span class="demo-tag">تجريبي</span>'}</small></div></div><div class="sp"></div>
       <button class="chip-btn" id="pushBtn">${UI.pushState() === "granted" ? "🔔" : "🔕 فعّل"}</button><a class="chip-btn" href="index.html" target="_blank" style="text-decoration:none">👁️</a><button class="chip-btn" id="outBtn">خروج</button></div>
       <div class="tabs">${TABS.map(([k, l]) => `<button class="${A.tab === k ? "on" : ""}" data-tab="${k}">${l}${k === "orders" && newCount() ? ` (${newCount()})` : ""}</button>`).join("")}</div></div></header>
@@ -52,7 +52,8 @@
     const today = A.orders.filter((o) => isToday(o.created_at) && o.status !== "cancelled");
     const rev = today.reduce((a, o) => a + num(o.total), 0);
     const active = A.orders.filter((o) => !["delivered", "cancelled"].includes(o.status));
-    return `<div class="h2">نظرة عامة</div><div class="stats">
+    const lowN = A.products.filter((p) => p.stock != null && num(p.stock) <= num(p.low_stock)).length;
+    return `${lowN ? `<div class="notice" data-tab="stock" style="cursor:pointer">📦 فيه ${lowN} منتج قرب يخلص أو خلص – اضغط للمخزون</div>` : ""}<div class="h2">نظرة عامة</div><div class="stats">
       <div class="stat"><span class="mut">طلبات اليوم</span><b>${today.length}</b></div><div class="stat"><span class="mut">مبيعات اليوم</span><b>${money(rev)}</b></div>
       <div class="stat"><span class="mut">طلبات جديدة</span><b style="color:${STATUS.new.c}">${newCount()}</b></div><div class="stat"><span class="mut">طلبات جارية</span><b>${active.length}</b></div></div>
       <div class="h2">إجراءات سريعة</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn tq" data-newprod>+ منتج جديد</button><button class="btn" data-tab="orders">إدارة الطلبات</button><button class="btn ghost" data-storeopen>${A.settings.store_open ? "⛔ إغلاق المتجر مؤقتاً" : "✅ فتح المتجر"}</button></div>
@@ -165,6 +166,54 @@
       ${rc.length ? rc.map((r) => `<div class="it" style="background:#fff;border-radius:14px;padding:10px;margin:8px 0;display:flex;align-items:center;gap:10px"><div class="t" style="flex:1"><b>${esc(r.name || "زبون")}</b><div class="mut">${esc(r.phone)}</div></div><b style="color:#b45309">${money(r.bal)}</b><button class="btn sm green" data-rpaid="${esc(r.phone)}">✅ دفع</button></div>`).join("") : '<p class="mut">مفيش فلوس آجل. علشان تسجّل طلب آجل، غيّر طريقة الدفع في الطلب لـ «📝 آجل».</p>'}
       <div class="h2">📒 سجل الحركات</div>
       <div class="list">${tx.length ? [...tx].sort((x, y) => new Date(y.date || y.created_at) - new Date(x.date || x.created_at)).map((t) => `<div class="it"><div class="t"><b>${KINDS[t.kind] || t.kind}${t.kind === "sale" ? " · " + (PAY[t.category] || PAY.cash) : t.category ? " · " + esc(t.category) : ""}</b><span class="mut">${esc(t.date || dayKey(t.created_at))}${t.party_name ? " · " + esc(t.party_name) : ""}${t.note ? " · " + esc(t.note) : ""}</span></div><b>${money(t.amount)}</b><button class="btn sm ghost" data-deltx="${t.id}">🗑️</button></div>`).join("") : '<p class="mut">مفيش حركات في الفترة دي.</p>'}</div>`;
+  }
+  // ---------- المخزون ----------
+  const MV = { purchase: "🛒 شراء", sale: "🧾 بيع", return: "↩️ مرتجع", waste: "🗑️ تالف", count: "📝 جرد" };
+  const fq = (n) => { n = num(n); return (Math.round(n * 1000) / 1000).toString(); };
+  function stockState(p) { if (p.stock == null) return "off"; if (num(p.stock) <= 0) return "out"; if (num(p.stock) <= num(p.low_stock)) return "low"; return "ok"; }
+  function stock() {
+    if (A.moves === null) return `<div class="notice">⚠️ المخزون محتاج كود SQL الأول – شغّل ملف <b>inventory.sql</b> في Supabase مرة واحدة.</div>`;
+    const f = A.sfilter || "all", q = (A.sq || "").trim();
+    const tracked = A.products.filter((p) => p.stock != null);
+    const cnt = (st) => A.products.filter((p) => stockState(p) === st).length;
+    const value = tracked.reduce((a, p) => a + Math.max(0, num(p.stock)) * num(p.cost), 0);
+    const list = A.products.filter((p) => (f === "all" || stockState(p) === f || (f === "low" && stockState(p) === "out")) && (!q || (p.name_ar + " " + (p.name_en || "")).includes(q)));
+    const SC = { ok: ["#16a34a", "متوفر"], low: ["#d97706", "قرب يخلص"], out: ["#dc2626", "خلص"], off: ["#94a3b8", "مش متتبَّع"] };
+    return `<div class="h2">📦 المخزون</div>
+      <div class="stats"><div class="stat"><span class="mut">منتجات متتبَّعة</span><b>${tracked.length}</b></div><div class="stat"><span class="mut">قرب يخلص</span><b style="color:#d97706">${cnt("low")}</b></div>
+        <div class="stat"><span class="mut">خلص</span><b style="color:#dc2626">${cnt("out")}</b></div><div class="stat"><span class="mut">قيمة البضاعة (بالتكلفة)</span><b>${money(value)}</b></div></div>
+      <div class="card" style="font-size:13px" ><span class="mut">💡 الكمية بتنقص لوحدها مع كل طلب، وبترجع لو الطلب اتلغى أو اتحذف. لما المنتج يخلص بيظهر للزبون «نفدت الكمية» لوحده.</span></div>
+      <div class="tabs" style="padding:4px 0">${[["all", "الكل"], ["low", "قرب يخلص"], ["out", "خلص"], ["off", "مش متتبَّع"]].map(([k, l]) => `<button style="background:${f === k ? "var(--tq)" : "#e2e8f0"};color:${f === k ? "#fff" : "#334155"}" data-sf="${k}">${l}</button>`).join("")}</div>
+      <input class="in" id="sq" placeholder="🔍 دوّر على منتج" value="${esc(q)}" style="margin:6px 0">
+      <div class="list">${list.map((p) => { const st = stockState(p); return `<div class="it" style="flex-wrap:wrap;border-inline-start:4px solid ${SC[st][0]}">
+        ${p.image ? `<img src="${esc(p.image)}" alt="">` : ""}<div class="t"><b>${esc(p.name_ar)}</b><span class="mut">${st === "off" ? "مش متتبَّع" : `<b style="display:inline;color:${SC[st][0]};font-size:18px">${fq(p.stock)}</b> ${esc(p.unit_ar || "")} · ${SC[st][1]}${num(p.low_stock) ? ` · تنبيه عند ${fq(p.low_stock)}` : ""}${p.cost != null ? ` · تكلفة ${money(p.cost)}` : ""}`}</span></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;width:100%">${st === "off" ? `<button class="btn sm tq" data-smv="count:${p.id}">▶️ ابدأ تتبّع المخزون</button>` : `<button class="btn sm tq" data-smv="purchase:${p.id}">➕ شراء</button><button class="btn sm ghost" data-smv="waste:${p.id}">➖ تالف</button><button class="btn sm ghost" data-smv="count:${p.id}">📝 جرد</button><button class="btn sm ghost" data-shist="${p.id}">📜 الحركات</button>`}</div></div>`; }).join("") || '<p class="mut">مفيش منتجات هنا.</p>'}</div>
+      <div class="h2">آخر الحركات</div><div class="card">${(A.moves || []).slice(0, 25).map(mvLine).join("") || '<p class="mut">لسه مفيش حركات.</p>'}</div>`;
+  }
+  function mvLine(m) { return `<div class="line"><span>${MV[m.kind] || m.kind} · ${esc(m.product_name || "")}<br><small class="mut">${fmtDate(m.created_at)}${m.note ? " · " + esc(m.note) : ""}${m.cost ? " · " + money(m.cost) : ""}</small></span><b style="color:${num(m.qty) >= 0 ? "#16a34a" : "#dc2626"};direction:ltr">${num(m.qty) > 0 ? "+" : ""}${fq(m.qty)}${m.balance != null ? ` <small class="mut">= ${fq(m.balance)}</small>` : ""}</b></div>`; }
+  function stockSheet(kind, id) {
+    const p = A.products.find((x) => x.id === id), u = esc(p.unit_ar || "");
+    const title = { purchase: "➕ شراء / استلام بضاعة", waste: "➖ تالف / هالك", count: p.stock == null ? "▶️ ابدأ تتبّع المخزون" : "📝 جرد (الكمية الفعلية)" }[kind];
+    sheet(`<h3>${title}</h3><p class="mut">${esc(p.name_ar)}${p.stock != null ? ` · الموجود دلوقتي: <b>${fq(p.stock)} ${u}</b>` : ""}</p>
+      <label class="f"><span>${kind === "count" ? "الكمية الموجودة فعلاً" : "الكمية"} (${u || "وحدة"}) *</span><input class="in" id="sQty" type="number" step="0.25" min="0" inputmode="decimal" value="${kind === "count" && p.stock != null ? fq(p.stock) : ""}"></label>
+      ${kind === "purchase" ? `<label class="f"><span>إجمالي سعر الشراء (د.ك) – اختياري</span><input class="in" id="sCost" type="number" step="0.005" min="0" inputmode="decimal"></label>
+        <label class="radio"><input type="checkbox" id="sTx" checked> سجّلها في الحسابات كمشتريات</label><label class="f"><span>المورد (اختياري)</span><input class="in" id="sParty"></label>` : ""}
+      ${kind === "waste" ? `<label class="f"><span>السبب</span><select class="in" id="sReason"><option>تالف / مش طازة</option><option>فاقد في التنظيف</option><option>استخدام داخلي</option><option>سبب آخر</option></select></label>` : ""}
+      ${kind === "count" ? `<label class="f"><span>نبّهني لما يقل عن (${u || "وحدة"})</span><input class="in" id="sLow" type="number" step="0.25" min="0" inputmode="decimal" value="${p.low_stock != null ? fq(p.low_stock) : ""}"></label>` : ""}
+      <label class="f"><span>ملاحظة</span><input class="in" id="sNote"></label><button class="btn tq block" id="sSave">💾 حفظ</button>`, () => {
+      $("sSave").onclick = async () => {
+        const raw = $("sQty").value; if (raw === "" || num(raw) < 0 || (kind !== "count" && !(num(raw) > 0))) return toast("اكتب الكمية", "err");
+        const qty = num(raw), cost = $("sCost") && $("sCost").value ? num($("sCost").value) : null;
+        const note = [$("sReason") ? $("sReason").value : "", $("sParty") && $("sParty").value.trim() ? "من " + $("sParty").value.trim() : "", $("sNote").value.trim()].filter(Boolean).join(" – ") || null;
+        $("sSave").disabled = true;
+        try {
+          await Store.stockMove({ product_id: id, kind, qty, cost, note });
+          if (kind === "count" && $("sLow").value !== "" && num($("sLow").value) !== num(p.low_stock)) await Store.saveProduct({ ...p, low_stock: num($("sLow").value) });
+          if (kind === "purchase" && cost && $("sTx").checked) await Store.saveTransaction({ kind: "purchase", amount: cost, date: dayKey(new Date()), category: p.name_ar, note: fq(qty) + " " + (p.unit_ar || ""), party_name: ($("sParty").value || "").trim() || null }).catch(() => toast("اتسجّل في المخزون بس – الحسابات مش متفعّلة", "err"));
+          closeSheet(); toast("اتسجّل ✓"); await refresh();
+        } catch (e) { $("sSave").disabled = false; toast(/stock_move|function/.test(e.message) ? "شغّل inventory.sql الأول" : e.message, "err"); }
+      };
+    });
   }
   function txSheet(kind, preset) {
     preset = preset || {};
@@ -368,6 +417,7 @@
 
   // ---------- الأحداث ----------
   function bind() {
+    const sq = $("sq"); if (sq) sq.oninput = (e) => { A.sq = e.target.value; const pos = e.target.selectionStart; render(); $("sq").focus(); $("sq").setSelectionRange(pos, pos); };
     const cq = $("cq"); if (cq) cq.oninput = (e) => { A.cq = e.target.value; const pos = e.target.selectionStart; render(); $("cq").focus(); $("cq").setSelectionRange(pos, pos); };
     const pc = $("pushCnt"); if (pc) Store.customerPushCount().then((n) => { pc.textContent = n; }).catch(() => { pc.textContent = "0"; });
     const co = $("cOnlyOpt"); if (co) co.onchange = (e) => { A.cOnlyOpt = e.target.checked; };
@@ -379,10 +429,13 @@
     const rb = $("resetBtn"); if (rb) rb.onclick = async () => { if (await UI.ask("مسح كل التعديلات والطلبات التجريبية؟")) { await Store.resetDemo(); await refresh(); toast("تم"); } };
   }
   document.addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx]"); if (!el || !A.me) return;
+    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx],[data-sf],[data-smv],[data-shist]"); if (!el || !A.me) return;
     const d = el.dataset;
     try {
       if (d.tab) { A.tab = d.tab; render(); scrollTo(0, 0); }
+      else if (d.sf) { A.sfilter = d.sf; render(); }
+      else if (d.smv) { const [k, id] = d.smv.split(":"); stockSheet(k, id); }
+      else if (d.shist) { const p = A.products.find((x) => x.id === d.shist); sheet(`<h3>📜 حركات ${esc(p.name_ar)}</h3>${(A.moves || []).filter((m) => m.product_id === p.id).map(mvLine).join("") || '<p class="mut">لسه مفيش حركات.</p>'}`); }
       else if (d.of) { A.ofilter = d.of; render(); }
       else if (d.newprod !== undefined) Editors.product(null, ctx());
       else if (d.editprod) Editors.product(d.editprod, ctx());
