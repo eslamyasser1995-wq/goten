@@ -138,6 +138,14 @@
     },
     async orders() { return LIVE ? chk(await sb.from("orders").select("*").order("created_at", { ascending: false }).limit(300)) : db().orders; },
     async updateOrder(id, patch) { patch = { ...patch, updated_at: nowISO() }; if (LIVE) return chk(await sb.from("orders").update(patch).eq("id", id)); const o = db().orders.find((x) => x.id === id); Object.assign(o, patch); persist(); },
+    async deleteOrder(id) {
+      if (LIVE) return chk(await sb.from("orders").delete().eq("id", id));
+      const d = db(); d.orders = d.orders.filter((o) => o.id !== id); persist();
+    },
+    async deleteAllOrders() {
+      if (LIVE) return chk(await sb.from("orders").delete().not("id", "is", null));
+      db().orders = []; persist();
+    },
     async driverOrders() {
       const me = await this.me(); if (!me) return [];
       if (LIVE) return chk(await sb.from("orders").select("*").eq("driver_id", me.id).order("created_at", { ascending: false }).limit(100));

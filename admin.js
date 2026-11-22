@@ -73,7 +73,7 @@
         <select class="in" data-opay="${o.id}">${Object.entries(PAY).map(([k, v]) => `<option value="${k}" ${(o.payment || "cash") === k ? "selected" : ""}>${v}</option>`).join("")}</select>
         <select class="in" data-odriver="${o.id}"><option value="">🛵 بدون مندوب</option>${drivers().map((d) => `<option value="${d.id}" ${o.driver_id === d.id ? "selected" : ""}>${esc(d.full_name)}</option>`).join("")}</select></div>
       <div class="acts"><a class="btn sm ghost" href="tel:+${esc(o.phone)}">📞 اتصال</a><a class="btn sm ghost" target="_blank" rel="noopener" href="https://wa.me/${esc(o.phone)}">💬 واتساب</a><a class="btn sm ghost" target="_blank" rel="noopener" href="${mapLink(o)}">🗺️ الخريطة</a>
-        ${o.status === "new" ? `<button class="btn sm green" data-quick="${o.id}:confirmed">✓ تأكيد</button>` : ""}${o.driver_id ? `<span class="pill">المندوب: ${esc(pname(o.driver_id))}</span>` : ""}</div></div>`;
+        ${o.status === "new" ? `<button class="btn sm green" data-quick="${o.id}:confirmed">✓ تأكيد</button>` : ""}${o.driver_id ? `<span class="pill">المندوب: ${esc(pname(o.driver_id))}</span>` : ""}<button class="btn sm ghost" data-delorder="${o.id}" style="margin-inline-start:auto">🗑️ حذف</button></div></div>`;
   }
   function orders() {
     const F = [["active", "الجارية"], ["new", "جديد"], ["out_for_delivery", "في الطريق"], ["delivered", "تم التوصيل"], ["cancelled", "ملغي"], ["all", "الكل"]];
@@ -81,7 +81,8 @@
     if (A.ofilter === "active") list = list.filter((o) => !["delivered", "cancelled"].includes(o.status));
     else if (A.ofilter !== "all") list = list.filter((o) => o.status === A.ofilter);
     return `<div class="filters">${F.map(([k, l]) => `<button class="${A.ofilter === k ? "on" : ""}" data-of="${k}">${l}</button>`).join("")}</div>
-      ${list.map(orderCard).join("") || '<p class="mut">لا توجد طلبات هنا.</p>'}`;
+      ${list.map(orderCard).join("") || '<p class="mut">لا توجد طلبات هنا.</p>'}
+      ${A.orders.length ? `<div style="text-align:center;margin:24px 0"><button class="btn red sm" data-delallorders>🗑️ مسح كل الطلبات (${A.orders.length})</button></div>` : ""}`;
   }
 
   // ---------- المنتجات ----------
@@ -378,7 +379,7 @@
     const rb = $("resetBtn"); if (rb) rb.onclick = async () => { if (await UI.ask("مسح كل التعديلات والطلبات التجريبية؟")) { await Store.resetDemo(); await refresh(); toast("تم"); } };
   }
   document.addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx]"); if (!el || !A.me) return;
+    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx]"); if (!el || !A.me) return;
     const d = el.dataset;
     try {
       if (d.tab) { A.tab = d.tab; render(); scrollTo(0, 0); }
@@ -397,6 +398,20 @@
         A.bulk = false; toast(`تم تحديث ${n} سعر ✓`); await refresh();
       }
       else if (d.quick) { const [id, st] = d.quick.split(":"); await Store.updateOrder(id, { status: st }); toast("تم ✓"); await refresh(); }
+      else if (d.delorder) {
+        const o = A.orders.find((x) => x.id === d.delorder);
+        if (await UI.ask(`حذف طلب #${o ? o.order_no : ""} نهائياً؟ مش هيرجع تاني.`)) { await Store.deleteOrder(d.delorder); toast("اتحذف الطلب ✓"); await refresh(); }
+      }
+      else if (d.delallorders !== undefined) {
+        if (!(await UI.ask(`مسح كل الطلبات (${A.orders.length} طلب) نهائياً؟ المبيعات والزباين اللي جايين من الطلبات هيتمسحوا كمان.`))) return;
+        sheet(`<h3>⚠️ تأكيد أخير</h3><p>علشان تتأكد إن مش بالغلط، اكتب كلمة <b>امسح</b> ودوس تأكيد.</p><input class="in" id="delWord" autocomplete="off"><button class="btn red block" id="delGo" style="margin-top:10px">🗑️ تأكيد المسح</button>`, () => {
+          $("delGo").onclick = async () => {
+            if ($("delWord").value.trim() !== "امسح") return toast("اكتب كلمة امسح بالظبط", "err");
+            $("delGo").disabled = true;
+            try { await Store.deleteAllOrders(); closeSheet(); toast("✅ اتمسحت كل الطلبات"); await refresh(); } catch (e) { toast(e.message, "err"); $("delGo").disabled = false; }
+          };
+        });
+      }
       else if (d.period) { A.period = d.period; render(); }
       else if (d.addtx) txSheet(d.addtx);
       else if (d.export !== undefined) exportCsv();
