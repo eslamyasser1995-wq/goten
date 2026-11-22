@@ -164,7 +164,7 @@
         ${byPay.map(([k, v]) => `<div class="line"><span>${PAY[k]}</span><b>${money(v)}</b></div>`).join("")}
         ${pending.length ? `<div class="line mut"><span>طلبات لسه ماتوصّلتش (${pending.length})</span><span>${money(sum(pending, (o) => o.total))}</span></div>` : ""}
         ${Object.keys(byCat).length ? `<div class="mut" style="margin-top:8px"><b>المصاريف حسب النوع:</b></div>${Object.entries(byCat).map(([k, v]) => `<div class="line"><span>${esc(k)}</span><span>${money(v)}</span></div>`).join("")}` : ""}</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" data-addtx="sale">🧾 + مبيعات</button><button class="btn tq sm" data-addtx="purchase">🛒 + مشتريات</button><button class="btn sm red" data-addtx="expense">💸 + مصروف</button><button class="btn sm green" data-addtx="income">💰 + إيراد</button><button class="btn ghost sm" data-export>📊 تصدير Excel</button></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" data-addtx="sale">🧾 + مبيعات</button><button class="btn tq sm" data-addtx="purchase">🛒 + مشتريات</button><button class="btn sm red" data-addtx="expense">💸 + مصروف</button><button class="btn sm green" data-addtx="income">💰 + إيراد</button><button class="btn sm" style="background:#7c3aed" data-stockpick>📦 + مخزون</button><button class="btn ghost sm" data-export>📊 تصدير Excel</button></div>
       <div class="h2">🛵 كاش مع المناديب</div>
       ${dc.length ? dc.map((r) => `<div class="it" style="background:#fff;border-radius:14px;padding:10px;margin:8px 0;display:flex;align-items:center;gap:10px"><div class="t" style="flex:1"><b>${esc(r.d.full_name || "مندوب")}</b><div class="mut">حصّل ${money(r.got)} · سلّم ${money(r.paid)}</div></div><b style="color:${r.bal > 0 ? "#b45309" : "#16a34a"}">${money(r.bal)}</b>${r.bal > 0.0005 ? `<button class="btn sm green" data-settle="${r.d.id}">✅ استلمت</button>` : ""}</div>`).join("") : '<p class="mut">مفيش مناديب.</p>'}
       <div class="h2">📝 فلوس عند الزباين (آجل) <button class="btn ghost sm" data-addtx="receivable">+ آجل</button></div>
@@ -264,10 +264,31 @@
       };
     });
   }
+  function stockPick() {
+    sheet(`<h3>📦 المخزون</h3><label class="f"><span>المنتج</span><select class="in" id="pkP">${A.products.map((p) => `<option value="${p.id}">${esc(p.name_ar)}${p.stock != null ? ` (موجود ${fq(p.stock)} ${esc(p.unit_ar || "")})` : " (مش متتبَّع)"}</option>`).join("")}</select></label>
+      <label class="radio"><input type="radio" name="pkK" value="purchase" checked> ➕ إضافة كمية (شراء بضاعة) – بتتسجّل في المشتريات</label>
+      <label class="radio"><input type="radio" name="pkK" value="count"> 📝 جرد – اكتب الكمية الموجودة فعلاً</label>
+      <label class="radio"><input type="radio" name="pkK" value="waste"> ➖ تالف / هالك</label>
+      <button class="btn tq block" id="pkGo" style="margin-top:8px">التالي ←</button><button class="btn ghost block" style="margin-top:8px" data-asub="stock">📋 افتح صفحة المخزون كلها</button>`, () => {
+      $("pkGo").onclick = () => { const id = $("pkP").value, k = document.querySelector("input[name=pkK]:checked").value; closeSheet(); if (!id) return; if (k === "purchase") txSheet("purchase", { product: id }); else stockSheet(k, id); };
+    });
+  }
   function exportCsv() {
     const rows = [["النوع", "التاريخ", "البيان", "الطرف", "طريقة الدفع", "المبلغ"]];
     A.orders.filter((o) => o.status === "delivered" && inPeriod(o.created_at)).forEach((o) => rows.push(["مبيعات – طلب #" + o.order_no, dayKey(o.created_at), (o.items || []).map((i) => i.name_ar + " ×" + i.qty).join(" + "), o.customer_name + " " + o.phone, PAY[o.payment || "cash"].replace(/^\S+ /, ""), num(o.total).toFixed(3)]));
     A.tx.filter((t) => inPeriod(t.date || t.created_at)).forEach((t) => rows.push([KINDS[t.kind].replace(/^\S+ /, ""), t.date || dayKey(t.created_at), [t.category, t.note].filter(Boolean).join(" – "), t.party_name || "", t.kind === "sale" ? (PAY[t.category] || PAY.cash).replace(/^\S+ /, "") : "", (t.kind === "sale" ? "" : ["purchase", "expense", "driver_settle"].includes(t.kind) ? "-" : "") + num(t.amount).toFixed(3)]));
+    const tracked = A.products.filter((p) => p.stock != null);
+    if (tracked.length) {
+      rows.push([], ["📦 المخزون الحالي"], ["المنتج", "الوحدة", "الكمية الموجودة", "حد التنبيه", "تكلفة الوحدة", "قيمة المخزون", "الحالة"]);
+      let tv = 0;
+      tracked.forEach((p) => { const v = Math.max(0, num(p.stock)) * num(p.cost); tv += v; rows.push([p.name_ar, p.unit_ar || "", fq(p.stock), fq(p.low_stock), p.cost != null ? num(p.cost).toFixed(3) : "", p.cost != null ? v.toFixed(3) : "", { ok: "متوفر", low: "قرب يخلص", out: "خلص" }[stockState(p)]]); });
+      rows.push(["الإجمالي", "", "", "", "", tv.toFixed(3), ""]);
+    }
+    const mv = (A.moves || []).filter((m) => inPeriod(m.created_at));
+    if (mv.length) {
+      rows.push([], ["📜 حركات المخزون في الفترة"], ["النوع", "التاريخ", "المنتج", "الكمية", "الرصيد بعدها", "التكلفة", "ملاحظة"]);
+      mv.forEach((m) => rows.push([(MV[m.kind] || m.kind).replace(/^\S+ /, ""), dayKey(m.created_at), m.product_name || "", (num(m.qty) > 0 ? "+" : "") + fq(m.qty), m.balance != null ? fq(m.balance) : "", m.cost ? num(m.cost).toFixed(3) : "", m.note || ""]));
+    }
     const csv = "﻿" + rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\r\n");
     const label = (PERIODS.find((p) => p[0] === A.period) || [, ""])[1];
     const file = new File([csv], `goten-حسابات-${label}-${dayKey(new Date())}.csv`, { type: "text/csv" });
@@ -449,12 +470,13 @@
     const rb = $("resetBtn"); if (rb) rb.onclick = async () => { if (await UI.ask("مسح كل التعديلات والطلبات التجريبية؟")) { await Store.resetDemo(); await refresh(); toast("تم"); } };
   }
   document.addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx],[data-sf],[data-smv],[data-shist],[data-asub],[data-buy]"); if (!el || !A.me) return;
+    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx],[data-sf],[data-smv],[data-shist],[data-asub],[data-buy],[data-stockpick]"); if (!el || !A.me) return;
     const d = el.dataset;
     try {
       if (d.tab) { A.tab = d.tab; render(); scrollTo(0, 0); }
+      else if (d.stockpick !== undefined) stockPick();
       else if (d.buy) txSheet("purchase", { product: d.buy });
-      else if (d.asub) { A.tab = "accounts"; A.asub = d.asub; render(); scrollTo(0, 0); }
+      else if (d.asub) { closeSheet(); A.tab = "accounts"; A.asub = d.asub; render(); scrollTo(0, 0); }
       else if (d.sf) { A.sfilter = d.sf; render(); }
       else if (d.smv) { const [k, id] = d.smv.split(":"); stockSheet(k, id); }
       else if (d.shist) { const p = A.products.find((x) => x.id === d.shist); sheet(`<h3>📜 حركات ${esc(p.name_ar)}</h3>${(A.moves || []).filter((m) => m.product_id === p.id).map(mvLine).join("") || '<p class="mut">لسه مفيش حركات.</p>'}`); }
