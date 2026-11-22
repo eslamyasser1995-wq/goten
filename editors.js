@@ -70,7 +70,7 @@
       <label class="f"><span>اسم المتجر</span><input class="in" id="h_name" value="${esc(s.store_name || "Goten")}"></label>
       <div class="row2"><label class="f"><span>الشعار النصي بالعربي</span><input class="in" id="h_tar" value="${esc(s.tagline_ar || "أسماك ومأكولات بحرية طازجة")}"></label><label class="f"><span>Tagline (English)</span><input class="in" id="h_ten" value="${esc(s.tagline_en || "Fresh fish & seafood")}"></label></div>
       <div class="row2"><label class="f"><span>شريط التنبيه بالعربي</span><input class="in" id="h_nar" value="${esc(s.notice_ar || "")}"></label><label class="f"><span>Notice (English)</span><input class="in" id="h_nen" value="${esc(s.notice_en || "")}"></label></div>
-      <label class="f"><span>لون الشريط</span><input class="in" id="h_color" type="color" value="${esc(s.header_color || "#0B2545")}" style="height:48px"></label>
+      <label class="f"><span>اللون الأساسي للأزرار</span><input class="in" id="h_color" type="color" value="${esc(s.header_color || "#0B2545")}" style="height:48px"></label>
       <button class="btn ghost sm" id="h_rmlogo" type="button">إرجاع الشعار الأصلي</button>
       <button class="btn tq block" id="hSave" style="margin-top:14px">💾 حفظ</button>`, () => {
       wireImgPicker(st);
