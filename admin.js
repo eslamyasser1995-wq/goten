@@ -29,6 +29,7 @@
 
   async function loadAll() {
     const [o, p, c, b, pr, s, ic, tx, mv, sp, cp] = await Promise.all([Store.orders(), Store.products(), Store.categories(), Store.banners(), Store.profiles(), Store.settings(), Store.importedCustomers().catch(() => []), Store.transactions().catch(() => []), Store.stockMoves().catch(() => null), Store.suppliers().catch(() => null), Store.coupons().catch(() => null)]);
+    A.dmoves = await Store.driverMoves().catch(() => []);
     Object.assign(A, { orders: o, products: p, cats: c, banners: b, profiles: pr, settings: s || {}, imported: ic || [], tx: tx || [], moves: mv, sups: sp, cps: cp });
     const ids = new Set(o.map((x) => x.id));
     if (A.known) { const fresh = o.filter((x) => !A.known.has(x.id)); if (fresh.length) { beep(); toast(`🔔 طلب جديد #${fresh[0].order_no}`); } }
@@ -655,9 +656,38 @@
   }
 
   // ---------- المناديب ----------
+  function dWallet(id) {
+    const del = A.orders.filter((o) => o.driver_id === id && o.status === "delivered"), mv = (A.dmoves || []).filter((m) => m.driver_id === id);
+    const cash = del.filter((o) => (o.payment || "cash") === "cash").reduce((a, o) => a + num(o.total), 0), earn = del.reduce((a, o) => a + num(o.driver_earning), 0);
+    const hand = mv.filter((m) => m.kind === "handover").reduce((a, m) => a + num(m.amount), 0), paid = mv.filter((m) => m.kind === "payout").reduce((a, m) => a + num(m.amount), 0);
+    const today = del.filter((o) => isToday(o.delivered_at || o.updated_at));
+    return { n: del.length, today: today.length, cash, earn, hand, paid, cashWith: cash - hand, due: earn - paid, mv };
+  }
+  function walletCards() {
+    const ds = A.profiles.filter((p) => p.role === "driver"); if (!ds.length) return "";
+    return `<div class="h2">💰 محافظ المناديب <span class="mut" style="font-size:13px">(${money(A.settings.driver_pay == null ? 0.5 : A.settings.driver_pay)} لكل توصيلة – تتغيّر من الإعدادات)</span></div>${ds.map((p) => { const w = dWallet(p.id); return `<div class="card"><div class="line"><b>🛵 ${esc(p.full_name || "مندوب")}</b><span class="mut">${w.n} توصيلة · النهارده ${w.today}</span></div>
+      <div class="line"><span>💵 كاش معاه للمحل</span><b style="color:${w.cashWith > 0.0005 ? "#b45309" : "#16a34a"}">${money(w.cashWith)}</b></div>
+      <div class="line"><span>💰 أرباحه اللي ليه</span><b style="color:#16a34a">${money(w.due)}</b></div>
+      <div class="line mut" style="font-size:13px"><span>الصافي</span><span>${w.cashWith - w.due >= 0 ? `يسلّمك ${money(w.cashWith - w.due)}` : `تدفعله ${money(w.due - w.cashWith)}`}</span></div>
+      <div class="acts"><button class="btn sm green" data-dmove="${p.id}:handover">💵 استلمت منه كاش</button><button class="btn sm tq" data-dmove="${p.id}:payout">💸 صرفتله أرباح</button>${w.mv.length ? `<button class="btn sm ghost" data-dmlog="${p.id}">📜 الحركات</button>` : ""}</div></div>`; }).join("")}`;
+  }
+  function dMoveSheet(id, kind) {
+    const p = A.profiles.find((x) => x.id === id), w = dWallet(id), sug = kind === "handover" ? Math.max(0, w.cashWith) : Math.max(0, w.due);
+    sheet(`<h3>${kind === "handover" ? "💵 استلمت كاش من" : "💸 صرفت أرباح لـ"} ${esc(p.full_name || "المندوب")}</h3>
+      <label class="f"><span>المبلغ (د.ك)</span><input class="in" id="dmA" type="number" step="0.005" inputmode="decimal" value="${sug ? sug.toFixed(3) : ""}"></label>
+      <label class="f"><span>ملاحظة (اختياري)</span><input class="in" id="dmN" placeholder="${kind === "handover" ? "مثال: كاش يوم الخميس" : "مثال: أرباح الأسبوع"}"></label>
+      <button class="btn tq block" id="dmS">💾 حفظ</button>`, () => {
+      $("dmS").onclick = async () => { const a = num($("dmA").value); if (!(a > 0)) return toast("اكتب المبلغ", "err"); $("dmS").disabled = true;
+        try { await Store.addDriverMove({ driver_id: id, kind, amount: a, note: $("dmN").value.trim() }); closeSheet(); toast("تم ✓"); await refresh(); } catch (e) { toast(e.message.includes("driver_moves") ? "محتاج تحديث قاعدة البيانات" : e.message, "err"); $("dmS").disabled = false; } };
+    });
+  }
+  function dMoveLog(id) {
+    const w = dWallet(id);
+    sheet(`<h3>📜 حركات المندوب</h3>${w.mv.map((m) => `<div class="line"><span>${m.kind === "payout" ? "💸 صرفتله" : "💵 استلمت"} ${fmtDate(m.created_at)}${m.note ? " – " + esc(m.note) : ""}</span><span><b>${money(m.amount)}</b> <button class="btn sm ghost" data-dmdel="${m.id}">🗑️</button></span></div>`).join("")}`);
+  }
   function team() {
     const R = { pending: "بانتظار الموافقة", driver: "مندوب", admin: "أدمن", blocked: "موقوف" };
-    return `<div class="h2">المناديب والحسابات ${Store.live ? "" : '<button class="btn tq sm" data-adddrv>+ مندوب</button>'}</div>
+    return `${walletCards()}<div class="h2">المناديب والحسابات ${Store.live ? "" : '<button class="btn tq sm" data-adddrv>+ مندوب</button>'}</div>
       <p class="mut">${Store.live ? "المندوب يسجّل من صفحة المناديب (driver.html)، وبعدها توافق عليه هنا بتغيير الصلاحية إلى «مندوب»." : "في الوضع التجريبي تقدر تضيف مناديب مباشرة."}</p>
       <div class="list">${A.profiles.map((p) => { const n = A.orders.filter((o) => o.driver_id === p.id && !["delivered", "cancelled"].includes(o.status)).length; return `<div class="it"><div style="font-size:30px">${p.role === "driver" ? "🛵" : p.role === "admin" ? "🛡️" : "👤"}</div><div class="t"><b>${esc(p.full_name || "بدون اسم")}</b><span class="mut">${esc(p.phone || "")}${p.role === "driver" ? ` · طلبات جارية: ${n}` : ""}</span></div>
         <select class="in" style="width:auto" data-role="${p.id}" ${p.id === A.me.id ? "disabled" : ""}>${Object.entries(R).map(([k, v]) => `<option value="${k}" ${p.role === k ? "selected" : ""}>${v}</option>`).join("")}</select></div>`; }).join("") || '<p class="mut">لا يوجد حسابات بعد.</p>'}</div>`;
@@ -673,6 +703,8 @@
       <label class="switch"><span>يظهر للزبون «بأسرع وقت»</span><input type="checkbox" id="s_allow_asap" ${s.allow_asap !== false ? "checked" : ""}></label>
       <label class="f"><span>الفترات (كل فترة في سطر)</span><textarea class="in" id="s_slots" rows="5" dir="ltr" style="text-align:right">${esc((Array.isArray(s.slots) ? s.slots : ["10:00 – 12:00", "12:00 – 14:00", "16:00 – 18:00", "18:00 – 20:00", "20:00 – 22:00"]).join("\n"))}</textarea></label>
       <div class="row2">${fi("slot_days", "يقدر يحجز لكام يوم قدّام", "number", 'min="1" max="7" inputmode="numeric"').replace('value=""', 'value="2"')}${fi("slot_cutoff", "تقفل الفترة قبل بدايتها بكام دقيقة", "number", 'min="0" inputmode="numeric"').replace('value=""', 'value="60"')}</div>
+      <div class="h2" style="margin-top:14px">🛵 أجرة المندوب</div>
+      ${fi("driver_pay", "المندوب ياخد كام على كل توصيلة (د.ك)", "number", 'step="0.005" min="0" inputmode="decimal"').replace('value=""', 'value="0.5"')}
       <div class="h2" style="margin-top:14px">⭐ نقاط الولاء</div>
       <label class="switch"><span>نظام النقاط شغال</span><input type="checkbox" id="s_points_on" ${s.points_on !== false ? "checked" : ""}></label>
       <div class="row3">${fi("points_per_kd", "نقاط لكل 1 د.ك", "number", 'step="0.5" min="0" inputmode="decimal"').replace('value=""', 'value="1"')}${fi("point_value", "قيمة النقطة (د.ك)", "number", 'step="0.001" min="0" inputmode="decimal"').replace('value=""', 'value="0.010"')}${fi("points_min", "أقل نقاط للاستخدام", "number", 'min="0" inputmode="numeric"').replace('value=""', 'value="100"')}</div>
@@ -692,12 +724,12 @@
     const pq = $("pq"); if (pq) pq.oninput = (e) => { A.pq = e.target.value; const pos = e.target.selectionStart; render(); $("pq").focus(); $("pq").setSelectionRange(pos, pos); };
     const ss = $("sSave"); if (ss) ss.onclick = async () => {
       const v = (k) => $("s_" + k).value.trim();
-      try { await Store.saveSettings({ store_open: $("s_store_open").checked, delivery_fee: num(v("delivery_fee")), min_order: num(v("min_order")), free_delivery_over: v("free_delivery_over") ? num(v("free_delivery_over")) : null, whatsapp: v("whatsapp").replace(/\D/g, ""), notice_ar: v("notice_ar"), notice_en: v("notice_en"), ...(v("delivery_eta") || A.settings.delivery_eta ? { delivery_eta: v("delivery_eta") || null } : {}), ...("slots" in A.settings || !Store.live ? { slots: $("s_slots").value.split(/\n+/).map((x) => x.trim()).filter(Boolean), slot_days: Math.max(1, Math.min(7, parseInt(v("slot_days")) || 2)), slot_cutoff: Math.max(0, parseInt(v("slot_cutoff")) || 0), allow_asap: $("s_allow_asap").checked } : {}), ...("points_on" in A.settings || !Store.live ? { points_on: $("s_points_on").checked, points_per_kd: Math.max(0, num(v("points_per_kd"))), point_value: Math.max(0, num(v("point_value"))), points_min: Math.max(0, parseInt(v("points_min")) || 0) } : {}) }); toast("تم الحفظ ✓"); await refresh(); } catch (e) { toast(e.message, "err"); }
+      try { await Store.saveSettings({ store_open: $("s_store_open").checked, delivery_fee: num(v("delivery_fee")), min_order: num(v("min_order")), free_delivery_over: v("free_delivery_over") ? num(v("free_delivery_over")) : null, whatsapp: v("whatsapp").replace(/\D/g, ""), notice_ar: v("notice_ar"), notice_en: v("notice_en"), ...(v("delivery_eta") || A.settings.delivery_eta ? { delivery_eta: v("delivery_eta") || null } : {}), ...("slots" in A.settings || !Store.live ? { slots: $("s_slots").value.split(/\n+/).map((x) => x.trim()).filter(Boolean), slot_days: Math.max(1, Math.min(7, parseInt(v("slot_days")) || 2)), slot_cutoff: Math.max(0, parseInt(v("slot_cutoff")) || 0), allow_asap: $("s_allow_asap").checked } : {}), ...("points_on" in A.settings || !Store.live ? { points_on: $("s_points_on").checked, points_per_kd: Math.max(0, num(v("points_per_kd"))), point_value: Math.max(0, num(v("point_value"))), points_min: Math.max(0, parseInt(v("points_min")) || 0) } : {}), ...("driver_pay" in A.settings || !Store.live ? { driver_pay: Math.max(0, num(v("driver_pay"))) } : {}) }); toast("تم الحفظ ✓"); await refresh(); } catch (e) { toast(e.message, "err"); }
     };
     const rb = $("resetBtn"); if (rb) rb.onclick = async () => { if (await UI.ask("مسح كل التعديلات والطلبات التجريبية؟")) { await Store.resetDemo(); await refresh(); toast("تم"); } };
   }
   document.addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx],[data-sf],[data-smv],[data-shist],[data-asub],[data-buy],[data-stockpick],[data-newsup],[data-supedit],[data-suppay],[data-supstmt],[data-supbuy],[data-newcust],[data-cpay],[data-csell],[data-cstmt],[data-cedit],[data-cpnew],[data-cpedit],[data-cptog],[data-cpshare]"); if (!el || !A.me) return;
+    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx],[data-sf],[data-smv],[data-shist],[data-asub],[data-buy],[data-stockpick],[data-newsup],[data-supedit],[data-suppay],[data-supstmt],[data-supbuy],[data-newcust],[data-cpay],[data-csell],[data-cstmt],[data-cedit],[data-cpnew],[data-cpedit],[data-cptog],[data-cpshare],[data-dmove],[data-dmlog],[data-dmdel]"); if (!el || !A.me) return;
     const d = el.dataset;
     try {
       if (d.tab) { A.tab = d.tab; render(); scrollTo(0, 0); }
@@ -736,6 +768,9 @@
         A.bulk = false; toast(`تم تحديث ${n} سعر ✓`); await refresh();
       }
       else if (d.quick) { const [id, st] = d.quick.split(":"); await Store.updateOrder(id, { status: st }); toast("تم ✓"); await refresh(); }
+      else if (d.dmove) { const [id, k] = d.dmove.split(":"); dMoveSheet(id, k); }
+      else if (d.dmlog) dMoveLog(d.dmlog);
+      else if (d.dmdel) { if (!(await UI.ask("مسح الحركة دي؟"))) return; try { await Store.deleteDriverMove(d.dmdel); closeSheet(); await refresh(); toast("اتمسحت"); } catch (err) { toast(err.message, "err"); } }
       else if (d.delorder) {
         const o = A.orders.find((x) => x.id === d.delorder);
         if (await UI.ask(`حذف طلب #${o ? o.order_no : ""} نهائياً؟ مش هيرجع تاني.`)) { await Store.deleteOrder(d.delorder); toast("اتحذف الطلب ✓"); await refresh(); }

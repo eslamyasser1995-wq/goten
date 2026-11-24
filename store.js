@@ -180,7 +180,7 @@
       const dr = d.profiles.find((x) => x.id === o.driver_id);
       return { ...o, driver_name: dr && dr.full_name, driver_phone: dr && dr.phone };
     },
-    async orders() { return LIVE ? chk(await sb.from("orders").select("*").order("created_at", { ascending: false }).limit(300)) : db().orders; },
+    async orders() { return LIVE ? chk(await sb.from("orders").select("*").order("created_at", { ascending: false }).limit(1000)) : db().orders; },
     async myPoints(ph) {
       if (LIVE) return chk(await sb.rpc("my_points", { ph }));
       const s = db().settings, b = demoPts(ph), pv = Number(s.point_value == null ? 0.01 : s.point_value);
@@ -190,7 +190,7 @@
       if (LIVE) return chk(await sb.rpc("rate_order", { oid: id, stars, note: note || null }));
       const o = db().orders.find((x) => x.id === id); if (!o || o.status !== "delivered" || o.rating) throw new Error("NOT_ALLOWED"); Object.assign(o, { rating: stars, rating_note: note || null, rated_at: nowISO() }); persist();
     },
-    async updateOrder(id, patch) { if (!LIVE && patch.status) { const o0 = db().orders.find((x) => x.id === id), st = db().settings; if (o0 && patch.status === "delivered" && o0.status !== "delivered") patch.points_earned = st.points_on === false ? 0 : Math.floor(Math.max(0, Number(o0.total) - Number(o0.delivery_fee || 0)) * Number(st.points_per_kd == null ? 1 : st.points_per_kd)); else if (o0 && o0.status === "delivered" && patch.status !== "delivered") patch.points_earned = 0; } patch = { ...patch, updated_at: nowISO() }; if (LIVE) return chk(await sb.from("orders").update(patch).eq("id", id)); const o = db().orders.find((x) => x.id === id); const was = o.status; Object.assign(o, patch); if (patch.status === "cancelled" && was !== "cancelled") demoOrderStock(o, 1, "return", "إلغاء طلب #"); else if (patch.status && was === "cancelled" && patch.status !== "cancelled") demoOrderStock(o, -1, "sale", "رجوع طلب #"); persist(); },
+    async updateOrder(id, patch) { if (!LIVE && patch.status) { const o0 = db().orders.find((x) => x.id === id), st = db().settings; if (o0 && patch.status === "delivered" && o0.status !== "delivered") { patch.delivered_at = nowISO(); patch.driver_earning = o0.driver_id ? Number(st.driver_pay == null ? 0.5 : st.driver_pay) : 0; } if (o0 && patch.status === "delivered" && o0.status !== "delivered") patch.points_earned = st.points_on === false ? 0 : Math.floor(Math.max(0, Number(o0.total) - Number(o0.delivery_fee || 0)) * Number(st.points_per_kd == null ? 1 : st.points_per_kd)); else if (o0 && o0.status === "delivered" && patch.status !== "delivered") patch.points_earned = 0; } patch = { ...patch, updated_at: nowISO() }; if (LIVE) return chk(await sb.from("orders").update(patch).eq("id", id)); const o = db().orders.find((x) => x.id === id); const was = o.status; Object.assign(o, patch); if (patch.status === "cancelled" && was !== "cancelled") demoOrderStock(o, 1, "return", "إلغاء طلب #"); else if (patch.status && was === "cancelled" && patch.status !== "cancelled") demoOrderStock(o, -1, "sale", "رجوع طلب #"); persist(); },
     async deleteOrder(id) {
       if (LIVE) return chk(await sb.from("orders").delete().eq("id", id));
       const d = db(), o = d.orders.find((x) => x.id === id); if (o && o.status !== "cancelled") demoOrderStock(o, 1, "return", "حذف طلب #"); d.orders = d.orders.filter((x) => x.id !== id); persist();
@@ -214,9 +214,19 @@
     },
     async driverOrders() {
       const me = await this.me(); if (!me) return [];
-      if (LIVE) return chk(await sb.from("orders").select("*").eq("driver_id", me.id).order("created_at", { ascending: false }).limit(100));
+      if (LIVE) return chk(await sb.from("orders").select("*").eq("driver_id", me.id).order("created_at", { ascending: false }).limit(1000));
       return db().orders.filter((o) => o.driver_id === me.id);
     },
+    async driverMoves(driverId) {
+      if (LIVE) { let q = sb.from("driver_moves").select("*").order("created_at", { ascending: false }).limit(500); if (driverId) q = q.eq("driver_id", driverId); return chk(await q); }
+      const all = db().driverMoves || []; return driverId ? all.filter((m) => m.driver_id === driverId) : all;
+    },
+    async addDriverMove(m) {
+      m = { driver_id: m.driver_id, kind: m.kind, amount: Number(m.amount), note: m.note || null };
+      if (LIVE) return chk(await sb.from("driver_moves").insert(m));
+      const d = db(); d.driverMoves = d.driverMoves || []; d.driverMoves.unshift({ ...m, id: uid(), created_at: nowISO() }); persist();
+    },
+    async deleteDriverMove(id) { if (LIVE) return chk(await sb.from("driver_moves").delete().eq("id", id)); const d = db(); d.driverMoves = (d.driverMoves || []).filter((x) => x.id !== id); persist(); },
     async driverSetStatus(id, st) {
       if (LIVE) return chk(await sb.rpc("driver_set_status", { oid: id, st }));
       if (!["out_for_delivery", "delivered"].includes(st)) throw new Error("BAD_STATUS");
