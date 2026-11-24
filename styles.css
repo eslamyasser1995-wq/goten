@@ -230,3 +230,11 @@ main.shop{padding-bottom:calc(150px + var(--safe-b))}
 .card.menu{padding:4px 14px}
 .card.menu button,.card.menu a{width:100%;display:flex;justify-content:space-between;align-items:center;border:0;background:none;padding:14px 0;border-bottom:1px solid var(--line);font-size:16px;color:var(--txt);text-decoration:none;cursor:pointer}
 .card.menu > :last-child{border-bottom:0}
+
+/* اختيارات المنتج ومواعيد التوصيل */
+.chips{display:flex;gap:8px;overflow-x:auto;padding:6px 0;scrollbar-width:none}.chips::-webkit-scrollbar{display:none}
+.chips.wrap{flex-wrap:wrap;overflow:visible}
+.chip{flex:0 0 auto;border:1.5px solid var(--line,#e2e8f0);background:#fff;color:#0f1d2e;border-radius:999px;padding:8px 14px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit}
+.chip small{font-weight:600;color:#64748b}
+.chip.on{background:var(--tq,#14b8a6);border-color:var(--tq,#14b8a6);color:#fff}.chip.on small{color:#e6fffb}
+.chip[data-slot]{direction:ltr;unicode-bidi:isolate}

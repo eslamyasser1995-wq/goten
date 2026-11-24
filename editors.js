@@ -16,6 +16,17 @@
     };
     $("imgUrl").oninput = (e) => { const v = e.target.value.trim(); if (v) { state.image = v; $("imgPrev").src = v; } };
   }
+  // اختيارات المنتج: كل سطر مجموعة → "التنظيف: بدون، تنظيف كامل +0.250"
+  const FISH_OPTS = "التنظيف: بدون تنظيف، تنظيف كامل +0.250\nالتقطيع: كامل، شرائح، فيليه +0.500، مكعبات +0.250\nالتجهيز: نيء، للشوي، للقلي";
+  function optsToText(o) { return (Array.isArray(o) ? o : []).map((g) => `${g.name}: ${(g.choices || []).map((c) => c.name + (Number(c.price) ? ` ${Number(c.price) > 0 ? "+" : ""}${Number(c.price)}` : "")).join("، ")}`).join("\n"); }
+  function textToOpts(t) {
+    return String(t || "").split(/\n+/).map((ln) => ln.trim()).filter(Boolean).map((ln) => {
+      const i = ln.search(/[:：]/); if (i < 1) return null;
+      const name = ln.slice(0, i).trim().replace(/\|/g, "");
+      const choices = ln.slice(i + 1).split(/[،,]/).map((c) => c.trim()).filter(Boolean).map((c) => { const m = c.match(/^(.*?)\s*([+-]\s*\d+(?:[.,]\d+)?)\s*$/); return m ? { name: m[1].trim().replace(/\|/g, ""), price: Number(m[2].replace(/\s/g, "").replace(",", ".")) } : { name: c.replace(/\|/g, ""), price: 0 }; }).filter((c) => c.name);
+      return choices.length ? { name, choices } : null;
+    }).filter(Boolean);
+  }
   function editProduct(id, E) {
     const p = id ? { ...E.products.find((x) => x.id === id) } : { active: true, in_stock: true, featured: false, unit_ar: "كيلو", unit_en: "kg", sort: 0, category_id: (E.cats[0] || {}).id || null, image: "" };
     const fi = (k, l, type = "text", extra = "") => `<label class="f"><span>${l}</span><input class="in" id="p_${k}" type="${type}" value="${esc(p[k] == null ? "" : p[k])}" ${extra}></label>`;
@@ -25,14 +36,22 @@
       <label class="f"><span>القسم</span><select class="in" id="p_category_id"><option value="">بدون قسم</option>${E.cats.map((c) => `<option value="${c.id}" ${p.category_id === c.id ? "selected" : ""}>${esc(c.name_ar)}</option>`).join("")}</select></label>
       <div class="row2">${fi("price", "السعر (د.ك) *", "number", 'step="0.005" min="0" inputmode="decimal"')}${fi("old_price", "السعر قبل الخصم", "number", 'step="0.005" min="0" inputmode="decimal"')}</div>
       <div class="row3">${fi("unit_ar", "الوحدة")}${fi("unit_en", "Unit")}${fi("sort", "الترتيب", "number", 'inputmode="numeric"')}</div>
+      <div class="card" style="background:#f0fdfa;margin:10px 0"><b>🐟 اختيارات المنتج</b><p class="mut" style="font-size:12px;margin:4px 0">كل سطر = اختيار (زي التنظيف أو التقطيع). اكتب الاسم وبعدين «:» والاختيارات مفصولة بفاصلة. لو اختيار عليه زيادة اكتب +السعر. أول اختيار هو الافتراضي. سيبه فاضي لو المنتج من غير اختيارات.</p>
+        <textarea class="in" id="p_opts" rows="4" dir="rtl" placeholder="التنظيف: بدون تنظيف، تنظيف كامل +0.250">${esc(optsToText(p.options))}</textarea>
+        <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><button type="button" class="btn sm" id="optFish">🐟 اختيارات السمك الجاهزة</button><button type="button" class="btn sm ghost" id="optWeight">⚖️ ضيف الوزن (لو بتبيع بالحبة)</button><button type="button" class="btn sm ghost" id="optClear">مسح</button></div><div id="optPrev" class="mut" style="font-size:12px;margin-top:6px"></div></div>
       <label class="f"><span>الوصف بالعربي</span><textarea class="in" id="p_desc_ar" rows="2">${esc(p.desc_ar || "")}</textarea></label>
       <label class="f"><span>الوصف بالإنجليزي</span><textarea class="in" id="p_desc_en" rows="2">${esc(p.desc_en || "")}</textarea></label>
       ${sw("active", "ظاهر في التطبيق")}${sw("in_stock", "متوفر")}${sw("featured", "يظهر في العروض المميزة")}
       <button class="btn tq block" id="pSave" style="margin-top:14px">💾 حفظ</button>${id ? '<button class="btn red block" id="pDel" style="margin-top:8px">🗑️ حذف المنتج</button>' : ""}`, () => {
       wireImgPicker(p);
+      const prev = () => { const o = textToOpts($("p_opts").value); $("optPrev").innerHTML = o.length ? o.map((g) => `<b>${esc(g.name)}</b>: ${g.choices.map((c) => esc(c.name) + (c.price ? ` (${c.price > 0 ? "+" : ""}${c.price.toFixed(3)})` : "")).join(" / ")}`).join("<br>") : "مفيش اختيارات"; };
+      $("p_opts").oninput = prev; prev();
+      $("optFish").onclick = () => { $("p_opts").value = FISH_OPTS; prev(); };
+      $("optWeight").onclick = () => { const pr = num($("p_price").value) || 0; const line = `الوزن: 1 كيلو، 1.5 كيلو +${(pr * 0.5).toFixed(3)}، 2 كيلو +${pr.toFixed(3)}`; $("p_opts").value = ($("p_opts").value.trim() ? $("p_opts").value.trim() + "\n" : "") + line; prev(); };
+      $("optClear").onclick = () => { $("p_opts").value = ""; prev(); };
       $("pSave").onclick = async () => {
         const v = (k) => $("p_" + k).value.trim(), c = (k) => $("p_" + k).checked;
-        const row = { ...p, name_ar: v("name_ar"), name_en: v("name_en"), category_id: v("category_id") || null, price: num(v("price")), old_price: v("old_price") ? num(v("old_price")) : null, unit_ar: v("unit_ar"), unit_en: v("unit_en"), sort: parseInt(v("sort")) || 0, desc_ar: $("p_desc_ar").value.trim(), desc_en: $("p_desc_en").value.trim(), active: c("active"), in_stock: c("in_stock"), featured: c("featured") };
+        const row = { ...p, name_ar: v("name_ar"), name_en: v("name_en"), category_id: v("category_id") || null, price: num(v("price")), old_price: v("old_price") ? num(v("old_price")) : null, unit_ar: v("unit_ar"), unit_en: v("unit_en"), sort: parseInt(v("sort")) || 0, desc_ar: $("p_desc_ar").value.trim(), desc_en: $("p_desc_en").value.trim(), active: c("active"), in_stock: c("in_stock"), featured: c("featured"), options: textToOpts($("p_opts").value) };
         if (!row.name_ar || !(row.price > 0)) return toast("الاسم والسعر مطلوبين", "err");
         try { $("pSave").disabled = true; await Store.saveProduct(row); toast("تم الحفظ ✓"); closeSheet(); await E.done(); } catch (e) { toast(e.message, "err"); $("pSave").disabled = false; }
       };

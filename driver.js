@@ -37,7 +37,7 @@
       <div style="margin-top:6px"><b>${esc(o.customer_name)}</b> · <span class="mut">${esc(o.slot || "")}</span></div>
       <div>📍 ${esc(o.area)} – قطعة ${esc(o.block)} – شارع ${esc(o.street)}${o.avenue ? " – جادة " + esc(o.avenue) : ""} – منزل ${esc(o.house)}${o.floor_apt ? " – " + esc(o.floor_apt) : ""}</div>
       ${o.notes ? `<div class="notice">📝 ${esc(o.notes)}</div>` : ""}
-      <div class="mut" style="margin-top:6px">${(o.items || []).map((i) => `${esc(i.name_ar)} ×${i.qty}`).join("، ")}</div>
+      <div class="mut" style="margin-top:6px">${(o.items || []).map((i) => `${esc(i.name_ar)} ×${i.qty}${(i.opts || []).length ? ` (${i.opts.map((x) => esc(x.c)).join("، ")})` : ""}`).join("، ")}${o.slot ? `<div>⏰ ${esc(o.slot)}</div>` : ""}${Number(o.discount) ? `<div>🎟️ خصم ${money(o.discount)}</div>` : ""}</div>
       <div class="line total" style="font-size:16px"><span>${o.payment === "credit" ? "📝 آجل – مفيش تحصيل" : o.payment === "knet_on_delivery" ? "💳 كي نت عند الاستلام" : "💵 المطلوب تحصيله كاش"}</span><span>${money(o.total)}</span></div>
       <div class="acts"><a class="btn sm ghost" href="tel:+${esc(o.phone)}">📞 اتصال</a><a class="btn sm ghost" target="_blank" rel="noopener" href="https://wa.me/${esc(o.phone)}">💬 واتساب</a><a class="btn sm ghost" target="_blank" rel="noopener" href="${mapLink(o)}">🗺️ الخريطة</a></div>
       ${act ? `<div style="margin-top:10px">${act}</div>` : ""}</div>`;

@@ -59,7 +59,7 @@
     ];
     return {
       categories: cats, products, banners, profiles, orders: [], nextNo: 1001,
-      settings: { delivery_fee: 1, min_order: 5, free_delivery_over: 20, store_open: true, whatsapp: C.STORE_PHONE || "", notice_ar: "بيانات تجريبية – غيّرها من لوحة التحكم", notice_en: "Sample data – edit it from the admin panel" }
+      settings: { delivery_fee: 1, min_order: 5, free_delivery_over: 20, store_open: true, slots: ["10:00 – 12:00", "12:00 – 14:00", "16:00 – 18:00", "18:00 – 20:00", "20:00 – 22:00"], slot_days: 2, slot_cutoff: 60, allow_asap: true, whatsapp: C.STORE_PHONE || "", notice_ar: "بيانات تجريبية – غيّرها من لوحة التحكم", notice_en: "Sample data – edit it from the admin panel" }
     };
   }
   let mem = null;
@@ -76,22 +76,38 @@
     d.stock_moves = d.stock_moves || []; d.stock_moves.unshift({ id: uid(), product_id: pid, product_name: pr.name_ar, kind, qty: delta, balance: pr.stock, cost: cost || null, order_id: oid || null, note: note || null, created_at: nowISO() });
   }
   function demoOrderStock(o, sign, kind, note) { (o.items || []).forEach((it) => demoStock(it.id, sign * Number(it.qty), kind, o.id, note + o.order_no)); }
+  function demoCoupon(code, sub, ph) {
+    const c = (db().coupons || []).find((x) => x.code === String(code || "").trim().toUpperCase());
+    if (!c || !c.active) throw new Error("COUPON_INVALID");
+    const now = Date.now();
+    if ((c.starts_at && now < new Date(c.starts_at)) || (c.ends_at && now > new Date(c.ends_at))) throw new Error("COUPON_EXPIRED");
+    if (c.max_uses != null && c.uses >= c.max_uses) throw new Error("COUPON_LIMIT");
+    if (sub < Number(c.min_order || 0)) throw new Error("COUPON_MIN:" + c.min_order);
+    if (c.once_per_phone && ph && db().orders.some((o) => o.phone === ph && o.coupon_code === c.code && o.status !== "cancelled")) throw new Error("COUPON_USED");
+    const disc = c.kind === "percent" ? Math.min(Math.round(sub * c.value * 10) / 1000, c.max_discount != null ? Number(c.max_discount) : sub) : c.kind === "fixed" ? Math.min(Number(c.value), sub) : 0;
+    return { code: c.code, kind: c.kind, discount: disc, free_delivery: c.kind === "free_delivery" };
+  }
   function demoPlace(p) {
     const d = db(), s = d.settings;
     if (!s.store_open) throw new Error("STORE_CLOSED");
-    const items = []; let sub = 0;
+    const items = [], tot = {}; let sub = 0;
     for (const it of p.items || []) {
       const pr = d.products.find((x) => x.id === it.id && x.active && x.in_stock);
       if (!pr) throw new Error("PRODUCT_UNAVAILABLE");
       const q = Math.max(1, Math.min(99, parseInt(it.qty) || 1));
-      if (pr.stock != null && Number(pr.stock) < q) throw new Error("OUT_OF_STOCK:" + pr.name_ar);
-      items.push({ id: pr.id, name_ar: pr.name_ar, name_en: pr.name_en, price: pr.price, qty: q, unit_ar: pr.unit_ar, image: pr.image });
-      sub += pr.price * q;
+      tot[pr.id] = (tot[pr.id] || 0) + q;
+      if (pr.stock != null && Number(pr.stock) < tot[pr.id]) throw new Error("OUT_OF_STOCK:" + pr.name_ar);
+      const opts = (pr.options || []).filter((g) => (g.choices || []).length).map((g) => { const want = (it.opts || []).find((o) => o.g === g.name); const ch = (want && g.choices.find((c) => c.name === want.c)) || g.choices[0]; return { g: g.name, c: ch.name, price: Number(ch.price || 0) }; });
+      const unit = Math.max(0, Number(pr.price) + opts.reduce((a, o) => a + o.price, 0));
+      items.push({ id: pr.id, name_ar: pr.name_ar, name_en: pr.name_en, price: unit, base_price: pr.price, opts, qty: q, unit_ar: pr.unit_ar, image: pr.image });
+      sub += unit * q;
     }
     if (!items.length) throw new Error("EMPTY");
     if (sub < (s.min_order || 0)) throw new Error("MIN_ORDER");
-    const fee = s.free_delivery_over && sub >= s.free_delivery_over ? 0 : Number(s.delivery_fee || 0);
-    const o = { ...p, id: uid(), order_no: d.nextNo++, items, subtotal: sub, delivery_fee: fee, total: sub + fee, status: "new", driver_id: null, created_at: nowISO(), updated_at: nowISO() };
+    let fee = s.free_delivery_over && sub >= s.free_delivery_over ? 0 : Number(s.delivery_fee || 0), disc = 0, cc = null;
+    if (p.coupon) { const r = demoCoupon(p.coupon, sub, p.phone); disc = r.discount; if (r.free_delivery) fee = 0; cc = r.code; const c = d.coupons.find((x) => x.code === cc); c.uses = (c.uses || 0) + 1; }
+    const { coupon, ...rest } = p;
+    const o = { ...rest, id: uid(), order_no: d.nextNo++, items, subtotal: sub, delivery_fee: fee, discount: disc, coupon_code: cc, total: Math.max(0, sub - disc + fee), status: "new", driver_id: null, created_at: nowISO(), updated_at: nowISO() };
     d.orders.unshift(o); demoOrderStock(o, -1, "sale", "طلب #"); persist();
     return { id: o.id, order_no: o.order_no, total: o.total };
   }
@@ -137,6 +153,19 @@
       return sb.storage.from("images").getPublicUrl(path).data.publicUrl;
     },
 
+    async checkCoupon(code, sub, ph) { return LIVE ? chk(await sb.rpc("check_coupon", { cc: code, sub, ph: ph || null })) : demoCoupon(code, sub, ph); },
+    async coupons() {
+      if (LIVE) { const r = await sb.from("coupons").select("*").order("created_at", { ascending: false }); if (r.error) { console.warn(r.error.message); return null; } return r.data; }
+      return db().coupons || [];
+    },
+    async saveCoupon(c, isNew) {
+      c = { ...c, code: String(c.code || "").trim().toUpperCase() };
+      if (LIVE) return chk(isNew ? await sb.from("coupons").insert(c) : await sb.from("coupons").update(c).eq("code", c.code));
+      const d = db(); d.coupons = d.coupons || []; const i = d.coupons.findIndex((x) => x.code === c.code);
+      if (isNew && i >= 0) throw new Error("duplicate key – الكود موجود قبل كده");
+      if (i >= 0) d.coupons[i] = { ...d.coupons[i], ...c }; else d.coupons.unshift({ uses: 0, created_at: nowISO(), ...c }); persist();
+    },
+    async deleteCoupon(code) { if (LIVE) return chk(await sb.from("coupons").delete().eq("code", code)); const d = db(); d.coupons = (d.coupons || []).filter((x) => x.code !== code); persist(); },
     async placeOrder(p) { return LIVE ? chk(await sb.rpc("place_order", { p })) : demoPlace(p); },
     async trackOrder(id) {
       if (LIVE) return chk(await sb.rpc("track_order", { oid: id }));

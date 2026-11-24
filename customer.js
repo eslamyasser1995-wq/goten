@@ -2,8 +2,8 @@
 (function () {
   const { esc, money, ls, toast, sheet, closeSheet, STATUS, STATUS_FLOW, AREAS, fmtDate, LOGO } = UI;
   const T = {
-    ar: { tag: "أسماك ومأكولات بحرية طازجة", search: "ابحث عن سمك، روبيان...", cats: "الأقسام", all: "الكل", offers: "عروض مميزة", products: "المنتجات", add: "أضف", out: "نفدت الكمية", home: "الرئيسية", cart: "السلة", orders: "طلباتي", viewCart: "عرض السلة", emptyCart: "سلتك فاضية", startShop: "ابدأ التسوق", subtotal: "المجموع", delivery: "التوصيل", free: "مجاني", total: "الإجمالي", checkout: "إتمام الطلب", minOrder: "الحد الأدنى للطلب", freeOver: "توصيل مجاني للطلبات فوق", name: "الاسم", phone: "رقم الهاتف", area: "المنطقة", chooseArea: "اختر المنطقة", block: "قطعة", street: "شارع", avenue: "جادة", house: "منزل / مبنى", floor: "الدور / الشقة", notes: "ملاحظات (تنظيف، تقطيع...)", slot: "وقت التوصيل", asap: "بأسرع وقت", pay: "طريقة الدفع", cash: "كاش عند الاستلام", knet: "كي نت عند الاستلام (جهاز المندوب)", place: "تأكيد الطلب", placed: "تم استلام طلبك!", orderNo: "رقم الطلب", track: "تتبع الطلب", noOrders: "ما عندك طلبات لسه", closed: "المتجر مغلق حالياً", driver: "المندوب", call: "اتصال", items: "المنتجات", back: "رجوع", required: "عبّي الحقول المطلوبة", phoneBad: "رقم الهاتف لازم 8 أرقام", lang: "English", addr: "عنوان التوصيل", whats: "واتساب", qty: "الكمية", today: "اليوم", tomorrow: "بكرة", noRes: "ما في نتائج", optin: "أوافق على استلام العروض والخصومات على الواتساب", cats2: "التصنيفات", status: "حالة الطلب", account: "حسابي", review: "مراجعة الطلب", addCart: "أضف إلى السلة", busy: "الفرع مشغول حالياً", deliverTo: "التوصيل إلى:", pickArea: "اختر منطقتك", eta: "توصيل نفس اليوم", other: "منتجات أخرى", seeAll: "الكل", myAddr: "عنواني", noAddr: "لسه ماسجلتش عنوان – هيتحفظ أول ما تطلب", contact: "تواصل معانا", installApp: "ضيف التطبيق للشاشة الرئيسية", installHint: "من Safari: زرار المشاركة ⬆️ ← إضافة إلى الشاشة الرئيسية", notif: "إشعارات العروض", langLbl: "اللغة", editAddr: "تعديل العنوان", save: "حفظ", errs: { STORE_CLOSED: "المتجر مغلق حالياً", PRODUCT_UNAVAILABLE: "منتج في سلتك لم يعد متوفراً", OUT_OF_STOCK: "الكمية المطلوبة أكبر من المتوفر", MIN_ORDER: "الطلب أقل من الحد الأدنى", EMPTY: "السلة فاضية" } },
-    en: { tag: "Fresh fish & seafood", search: "Search fish, shrimp...", cats: "Categories", all: "All", offers: "Special offers", products: "Products", add: "Add", out: "Out of stock", home: "Home", cart: "Cart", orders: "Orders", viewCart: "View cart", emptyCart: "Your cart is empty", startShop: "Start shopping", subtotal: "Subtotal", delivery: "Delivery", free: "Free", total: "Total", checkout: "Checkout", minOrder: "Minimum order", freeOver: "Free delivery over", name: "Name", phone: "Phone", area: "Area", chooseArea: "Choose area", block: "Block", street: "Street", avenue: "Avenue", house: "House / Building", floor: "Floor / Apt", notes: "Notes (cleaning, cutting...)", slot: "Delivery time", asap: "As soon as possible", pay: "Payment", cash: "Cash on delivery", knet: "KNET on delivery (driver's machine)", place: "Place order", placed: "Order received!", orderNo: "Order no.", track: "Track order", noOrders: "No orders yet", closed: "Store is closed now", driver: "Driver", call: "Call", items: "Items", back: "Back", required: "Please fill the required fields", phoneBad: "Phone must be 8 digits", lang: "عربي", addr: "Delivery address", whats: "WhatsApp", qty: "Qty", today: "Today", tomorrow: "Tomorrow", noRes: "No results", optin: "Send me offers & discounts on WhatsApp", cats2: "Categories", status: "Order status", account: "Account", review: "Review order", addCart: "Add to cart", busy: "Store is busy now", deliverTo: "Deliver to:", pickArea: "Choose your area", eta: "Same-day delivery", other: "More products", seeAll: "All", myAddr: "My address", noAddr: "No address yet – it will be saved with your first order", contact: "Contact us", installApp: "Add the app to your Home Screen", installHint: "In Safari: Share ⬆️ → Add to Home Screen", notif: "Offer notifications", langLbl: "Language", editAddr: "Edit address", save: "Save", errs: { STORE_CLOSED: "Store is closed now", PRODUCT_UNAVAILABLE: "An item in your cart is no longer available", OUT_OF_STOCK: "Requested quantity is more than available", MIN_ORDER: "Order is below the minimum", EMPTY: "Cart is empty" } }
+    ar: { tag: "أسماك ومأكولات بحرية طازجة", search: "ابحث عن سمك، روبيان...", cats: "الأقسام", all: "الكل", offers: "عروض مميزة", products: "المنتجات", add: "أضف", out: "نفدت الكمية", home: "الرئيسية", cart: "السلة", orders: "طلباتي", viewCart: "عرض السلة", emptyCart: "سلتك فاضية", startShop: "ابدأ التسوق", subtotal: "المجموع", delivery: "التوصيل", free: "مجاني", total: "الإجمالي", checkout: "إتمام الطلب", minOrder: "الحد الأدنى للطلب", freeOver: "توصيل مجاني للطلبات فوق", name: "الاسم", phone: "رقم الهاتف", area: "المنطقة", chooseArea: "اختر المنطقة", block: "قطعة", street: "شارع", avenue: "جادة", house: "منزل / مبنى", floor: "الدور / الشقة", notes: "ملاحظات (تنظيف، تقطيع...)", slot: "وقت التوصيل", asap: "بأسرع وقت", pay: "طريقة الدفع", cash: "كاش عند الاستلام", knet: "كي نت عند الاستلام (جهاز المندوب)", place: "تأكيد الطلب", placed: "تم استلام طلبك!", orderNo: "رقم الطلب", track: "تتبع الطلب", noOrders: "ما عندك طلبات لسه", closed: "المتجر مغلق حالياً", driver: "المندوب", call: "اتصال", items: "المنتجات", back: "رجوع", required: "عبّي الحقول المطلوبة", phoneBad: "رقم الهاتف لازم 8 أرقام", lang: "English", addr: "عنوان التوصيل", whats: "واتساب", qty: "الكمية", today: "اليوم", tomorrow: "بكرة", noRes: "ما في نتائج", optin: "أوافق على استلام العروض والخصومات على الواتساب", cats2: "التصنيفات", status: "حالة الطلب", account: "حسابي", review: "مراجعة الطلب", addCart: "أضف إلى السلة", busy: "الفرع مشغول حالياً", deliverTo: "التوصيل إلى:", pickArea: "اختر منطقتك", eta: "توصيل نفس اليوم", other: "منتجات أخرى", seeAll: "الكل", myAddr: "عنواني", noAddr: "لسه ماسجلتش عنوان – هيتحفظ أول ما تطلب", contact: "تواصل معانا", installApp: "ضيف التطبيق للشاشة الرئيسية", installHint: "من Safari: زرار المشاركة ⬆️ ← إضافة إلى الشاشة الرئيسية", notif: "إشعارات العروض", langLbl: "اللغة", editAddr: "تعديل العنوان", save: "حفظ", coupon: "كود خصم", apply: "تطبيق", remove: "إزالة", discount: "الخصم", couponOk: "تم تطبيق الكود ✓", choose: "اختار", inCart: "في السلة", day: "اليوم", pickTime: "اختار الوقت", noSlots: "مفيش مواعيد متاحة", afterTomorrow: "بعد بكرة", errs: { COUPON_INVALID: "الكود غلط أو مش شغال", COUPON_EXPIRED: "الكود انتهت صلاحيته", COUPON_LIMIT: "الكود خلص عدد استخداماته", COUPON_USED: "استخدمت الكود ده قبل كده", COUPON_MIN: "الكود محتاج طلب بحد أدنى", STORE_CLOSED: "المتجر مغلق حالياً", PRODUCT_UNAVAILABLE: "منتج في سلتك لم يعد متوفراً", OUT_OF_STOCK: "الكمية المطلوبة أكبر من المتوفر", MIN_ORDER: "الطلب أقل من الحد الأدنى", EMPTY: "السلة فاضية" } },
+    en: { tag: "Fresh fish & seafood", search: "Search fish, shrimp...", cats: "Categories", all: "All", offers: "Special offers", products: "Products", add: "Add", out: "Out of stock", home: "Home", cart: "Cart", orders: "Orders", viewCart: "View cart", emptyCart: "Your cart is empty", startShop: "Start shopping", subtotal: "Subtotal", delivery: "Delivery", free: "Free", total: "Total", checkout: "Checkout", minOrder: "Minimum order", freeOver: "Free delivery over", name: "Name", phone: "Phone", area: "Area", chooseArea: "Choose area", block: "Block", street: "Street", avenue: "Avenue", house: "House / Building", floor: "Floor / Apt", notes: "Notes (cleaning, cutting...)", slot: "Delivery time", asap: "As soon as possible", pay: "Payment", cash: "Cash on delivery", knet: "KNET on delivery (driver's machine)", place: "Place order", placed: "Order received!", orderNo: "Order no.", track: "Track order", noOrders: "No orders yet", closed: "Store is closed now", driver: "Driver", call: "Call", items: "Items", back: "Back", required: "Please fill the required fields", phoneBad: "Phone must be 8 digits", lang: "عربي", addr: "Delivery address", whats: "WhatsApp", qty: "Qty", today: "Today", tomorrow: "Tomorrow", noRes: "No results", optin: "Send me offers & discounts on WhatsApp", cats2: "Categories", status: "Order status", account: "Account", review: "Review order", addCart: "Add to cart", busy: "Store is busy now", deliverTo: "Deliver to:", pickArea: "Choose your area", eta: "Same-day delivery", other: "More products", seeAll: "All", myAddr: "My address", noAddr: "No address yet – it will be saved with your first order", contact: "Contact us", installApp: "Add the app to your Home Screen", installHint: "In Safari: Share ⬆️ → Add to Home Screen", notif: "Offer notifications", langLbl: "Language", editAddr: "Edit address", save: "Save", coupon: "Promo code", apply: "Apply", remove: "Remove", discount: "Discount", couponOk: "Code applied ✓", choose: "Choose", inCart: "in cart", day: "Day", pickTime: "Pick a time", noSlots: "No slots available", afterTomorrow: "Day after", errs: { COUPON_INVALID: "Invalid code", COUPON_EXPIRED: "Code expired", COUPON_LIMIT: "Code fully used", COUPON_USED: "You already used this code", COUPON_MIN: "Code needs a higher minimum order", STORE_CLOSED: "Store is closed now", PRODUCT_UNAVAILABLE: "An item in your cart is no longer available", OUT_OF_STOCK: "Requested quantity is more than available", MIN_ORDER: "Order is below the minimum", EMPTY: "Cart is empty" } }
   };
   const S = { lang: ls.get("ik_lang", "ar"), cart: ls.get("ik_cart", {}), my: ls.get("ik_orders", []), addr: ls.get("ik_addr", {}), view: "home", searchOpen: false, edit: false, all: { p: [], c: [], b: [] }, cat: null, q: "", products: [], cats: [], banners: [], settings: {} };
   const t = (k) => T[S.lang][k];
@@ -17,20 +17,35 @@
     const [p, c, b, s] = await Promise.all([Store.products(), Store.categories(), Store.banners(), Store.settings()]);
     S.all = { p, c, b }; S.products = S.edit ? p : p.filter((x) => x.active); S.cats = S.edit ? c : c.filter((x) => x.active); S.banners = S.edit ? b : b.filter((x) => x.active); S.settings = s || {};
     // تنظيف السلة من منتجات محذوفة
-    Object.keys(S.cart).forEach((id) => { if (!S.products.find((p) => p.id === id)) delete S.cart[id]; }); saveCart();
+    Object.keys(S.cart).forEach((k) => { if (!S.products.find((p) => p.id === k.split("|")[0])) delete S.cart[k]; }); saveCart();
   }
 
-  const cartLines = () => Object.entries(S.cart).map(([id, q]) => ({ p: S.products.find((x) => x.id === id), q })).filter((l) => l.p);
+  // مفتاح السلة: id أو id|اختيار1|اختيار2 (بترتيب مجموعات الاختيارات)
+  const optsOf = (p) => (Array.isArray(p.options) ? p.options : []).filter((g) => g && g.name && (g.choices || []).length);
+  const hasOpts = (p) => optsOf(p).length > 0;
+  function lineOf(key, q) {
+    const [id, ...sel] = key.split("|"), p = S.products.find((x) => x.id === id); if (!p) return null;
+    const opts = optsOf(p).map((g, i) => { const ch = g.choices.find((c) => c.name === sel[i]) || g.choices[0]; return { g: g.name, c: ch.name, price: Number(ch.price || 0) }; });
+    return { key, p, q, opts, unit: Math.max(0, Number(p.price) + opts.reduce((a, o) => a + o.price, 0)) };
+  }
+  const cartLines = () => Object.entries(S.cart).map(([k, q]) => lineOf(k, q)).filter(Boolean);
+  const qOf = (id) => Object.entries(S.cart).reduce((a, [k, q]) => a + (k === id || k.startsWith(id + "|") ? q : 0), 0);
+  const optsTxt = (opts) => opts.filter((o) => o.c).map((o) => `${o.g}: ${o.c}`).join(" · ");
   const cartCount = () => cartLines().reduce((a, l) => a + l.q, 0);
   function totals() {
-    const sub = cartLines().reduce((a, l) => a + l.p.price * l.q, 0), s = S.settings;
-    const fee = s.free_delivery_over && sub >= s.free_delivery_over ? 0 : Number(s.delivery_fee || 0);
-    return { sub, fee, total: sub + fee };
+    const sub = cartLines().reduce((a, l) => a + l.unit * l.q, 0), s = S.settings;
+    let fee = s.free_delivery_over && sub >= s.free_delivery_over ? 0 : Number(s.delivery_fee || 0);
+    const c = S.coupon; let disc = 0;
+    if (c) { if (c.kind === "free_delivery") fee = 0; else disc = Math.min(sub, Number(c.discount || 0)); }
+    return { sub, fee, disc, total: Math.max(0, sub - disc + fee) };
   }
-  function setQty(id, q) {
-    const p = S.products.find((x) => x.id === id), max = p && p.stock != null ? Math.floor(Number(p.stock)) : 99;
-    if (q > max) { q = max; toast(S.lang === "en" ? `Only ${max} available` : `المتوفر ${max} بس`, "err"); }
-    if (q <= 0) delete S.cart[id]; else S.cart[id] = Math.min(99, q); saveCart(); render();
+  function setQty(key, q) {
+    const id = key.split("|")[0], p = S.products.find((x) => x.id === id), max = p && p.stock != null ? Math.floor(Number(p.stock)) : 99;
+    const others = qOf(id) - (S.cart[key] || 0);
+    if (q + others > max) { q = Math.max(0, max - others); toast(S.lang === "en" ? `Only ${max} available` : `المتوفر ${max} بس`, "err"); }
+    if (q <= 0) delete S.cart[key]; else S.cart[key] = Math.min(99, q);
+    if (S.coupon) S.coupon = null; // يتحسب تاني لو السلة اتغيرت
+    saveCart(); render();
   }
 
   // ---------- العرض ----------
@@ -53,7 +68,8 @@
       ${S.searchOpen ? `<div class="search">${IC.search}<input id="q" placeholder="${t("search")}" value="${esc(S.q)}" autocomplete="off"></div>` : ""}</div></header>`;
   }
   function qtyCtl(p) {
-    const q = S.cart[p.id] || 0;
+    const q = qOf(p.id);
+    if (hasOpts(p) && p.in_stock && S.settings.store_open) return q ? `<div class="qty"><button data-open="${p.id}">+</button><b>${q}</b><button data-dec="${p.id}">−</button></div>` : `<button class="add-pill" data-open="${p.id}">${t("choose")} +</button>`;
     if (!p.in_stock) return `<button class="add-out" disabled>${t("out")}</button>`;
     if (!S.settings.store_open) return `<button class="add-out" disabled>${t("addCart")} +</button>`;
     return q ? `<div class="qty"><button data-inc="${p.id}">+</button><b>${q}</b><button data-dec="${p.id}">−</button></div>` : `<button class="add-pill" data-inc="${p.id}">${t("addCart")} +</button>`;
@@ -73,7 +89,7 @@
   function fcard(p) {
     return `<div class="fcard"><div class="fimg" data-open="${p.id}"><img src="${esc(p.image)}" alt="" loading="lazy">${p.old_price > p.price ? `<span class="badge">-${Math.round((1 - p.price / p.old_price) * 100)}%</span>` : ""}</div>
       <div class="fb"><div class="pname" data-open="${p.id}">${esc(nm(p))}</div><div class="pprice">${money(p.price, S.lang)}</div>
-      ${p.in_stock && S.settings.store_open ? (S.cart[p.id] ? `<div class="qty sm"><button data-inc="${p.id}">+</button><b>${S.cart[p.id]}</b><button data-dec="${p.id}">−</button></div>` : `<button class="fplus" data-inc="${p.id}" aria-label="add">+</button>`) : `<span class="mut">${t(!p.in_stock ? "out" : "busy")}</span>`}</div></div>`;
+      ${p.in_stock && S.settings.store_open ? (qOf(p.id) ? `<div class="qty sm"><button ${hasOpts(p) ? "data-open" : "data-inc"}="${p.id}">+</button><b>${qOf(p.id)}</b><button data-dec="${p.id}">−</button></div>` : `<button class="fplus" ${hasOpts(p) ? "data-open" : "data-inc"}="${p.id}" aria-label="add">+</button>`) : `<span class="mut">${t(!p.in_stock ? "out" : "busy")}</span>`}</div></div>`;
   }
   function sections() {
     const groups = S.cats.map((c) => ({ c, items: S.products.filter((p) => p.category_id === c.id) }));
@@ -128,25 +144,40 @@
   }
   function summary() {
     const x = totals();
-    return `<div class="line"><span>${t("subtotal")}</span><b>${money(x.sub, S.lang)}</b></div><div class="line"><span>${t("delivery")}</span><b>${x.fee ? money(x.fee, S.lang) : t("free")}</b></div><div class="line total"><span>${t("total")}</span><span>${money(x.total, S.lang)}</span></div>`;
+    return `<div class="line"><span>${t("subtotal")}</span><b>${money(x.sub, S.lang)}</b></div><div class="line"><span>${t("delivery")}</span><b>${x.fee ? money(x.fee, S.lang) : t("free")}</b></div>${x.disc ? `<div class="line" style="color:#16a34a"><span>🎟️ ${t("discount")} (${esc(S.coupon.code)})</span><b>−${money(x.disc, S.lang)}</b></div>` : ""}<div class="line total"><span>${t("total")}</span><span>${money(x.total, S.lang)}</span></div>`;
   }
   function cart() {
     const lines = cartLines();
     if (!lines.length) return `<div class="wrap"><div class="empty"><div class="e">🛒</div><p>${t("emptyCart")}</p><button class="btn tq" data-view="home">${t("startShop")}</button></div></div>`;
     const x = totals(), min = Number(S.settings.min_order || 0);
-    return `<div class="wrap"><div class="h2">${t("cart")}</div><div class="card">${lines.map((l) => `<div class="citem"><img src="${esc(l.p.image)}" alt=""><div class="t"><b>${esc(nm(l.p))}</b><div class="mut">${money(l.p.price, S.lang)} / ${esc(nm(l.p, "unit"))}</div></div>${qtyCtl(l.p)}</div>`).join("")}</div>
+    return `<div class="wrap"><div class="h2">${t("cart")}</div><div class="card">${lines.map((l) => `<div class="citem"><img src="${esc(l.p.image)}" alt=""><div class="t"><b>${esc(nm(l.p))}</b>${l.opts.length ? `<div class="mut" style="font-size:12px">${esc(optsTxt(l.opts))}</div>` : ""}<div class="mut">${money(l.unit, S.lang)} / ${esc(nm(l.p, "unit"))}</div></div><div class="qty"><button data-inc="${esc(l.key)}">+</button><b>${l.q}</b><button data-dec="${esc(l.key)}">−</button></div></div>`).join("")}</div>
       <div class="card">${summary()}</div>
       ${x.sub < min ? `<div class="notice">${t("minOrder")}: ${money(min, S.lang)}</div>` : ""}
       <button class="btn tq block" data-view="checkout" ${x.sub < min || !S.settings.store_open ? "disabled" : ""}>${t("checkout")}</button></div>`;
   }
-  function slots() {
-    const out = [{ v: t("asap"), l: t("asap") }];
-    const n = new Date();
-    for (let d = 0; d < 2; d++) for (let h = 9; h <= 21; h += 2) {
-      if (d === 0 && h <= n.getHours() + 1) continue;
-      const lab = `${d ? t("tomorrow") : t("today")} ${h}:00 – ${h + 2}:00`; out.push({ v: lab, l: lab });
+  // مواعيد التوصيل من إعدادات لوحة التحكم
+  function slotDays() {
+    const s = S.settings, list = Array.isArray(s.slots) && s.slots.length ? s.slots : ["10:00 – 12:00", "12:00 – 14:00", "16:00 – 18:00", "18:00 – 20:00", "20:00 – 22:00"];
+    const days = Math.max(1, Math.min(7, parseInt(s.slot_days) || 2)), cut = Number(s.slot_cutoff ?? 60), now = new Date(), out = [];
+    const WD = { ar: ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"], en: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] };
+    for (let d = 0; d < days; d++) {
+      const day = new Date(now); day.setDate(now.getDate() + d);
+      const label = d === 0 ? t("today") : d === 1 ? t("tomorrow") : `${WD[S.lang][day.getDay()]} ${day.getDate()}/${day.getMonth() + 1}`;
+      const times = list.filter((sl) => { if (d > 0) return true; const m = String(sl).match(/(\d{1,2})[:.](\d{2})/); if (!m) return true; const st = new Date(now); st.setHours(+m[1], +m[2], 0, 0); return st - now > cut * 60e3; });
+      if (times.length) out.push({ label, times });
     }
     return out;
+  }
+  function slotPicker() {
+    const days = slotDays(), asap = S.settings.allow_asap !== false;
+    if (S.slotDay == null || S.slotDay >= days.length) S.slotDay = 0;
+    const cur = S.slotSel || (asap ? t("asap") : days[0] ? `${days[0].label} ${days[0].times[0]}` : "");
+    S.slotSel = cur;
+    const chip = (v, l, on) => `<button type="button" class="chip${on ? " on" : ""}" data-slot="${esc(v)}">${esc(l)}</button>`;
+    return `<input type="hidden" id="f_slot" value="${esc(cur)}">
+      ${asap ? `<div class="chips">${chip(t("asap"), "⚡ " + t("asap"), cur === t("asap"))}</div>` : ""}
+      ${days.length ? `<div class="chips">${days.map((d, i) => `<button type="button" class="chip${S.slotDay === i ? " on" : ""}" data-sday="${i}">${esc(d.label)}</button>`).join("")}</div>
+      <div class="chips">${(days[S.slotDay] || days[0]).times.map((tm) => { const v = `${(days[S.slotDay] || days[0]).label} ${tm}`; return chip(v, "🕒 " + tm, cur === v); }).join("")}</div>` : `<p class="mut">${t("noSlots")}</p>`}`;
   }
   function checkout() {
     const a = S.addr;
@@ -158,7 +189,8 @@
         <div class="row3">${f("block", t("block"), 1, "text", 'inputmode="numeric"')}${f("street", t("street"), 1)}${f("avenue", t("avenue"), 0)}</div>
         <div class="row2">${f("house", t("house"), 1)}${f("floor_apt", t("floor"), 0)}</div>
         <label class="f"><span>${t("notes")}</span><textarea class="in" id="f_notes" rows="2"></textarea></label></div>
-      <div class="card"><b>${t("slot")}</b><select class="in" id="f_slot" style="margin-top:8px">${slots().map((s) => `<option value="${esc(s.v)}">${esc(s.l)}</option>`).join("")}</select></div>
+      <div class="card"><b>${t("slot")}</b><div id="slotBox">${slotPicker()}</div></div>
+      <div class="card"><b>🎟️ ${t("coupon")}</b>${S.coupon ? `<div class="line" style="color:#16a34a"><span>✓ ${esc(S.coupon.code)}</span><button class="btn ghost sm" id="cpDel">${t("remove")}</button></div>` : `<div class="row2" style="margin-top:8px;grid-template-columns:1fr auto"><input class="in" id="f_coupon" placeholder="GOTEN10" autocapitalize="characters" style="text-transform:uppercase"><button class="btn sm" id="cpBtn">${t("apply")}</button></div>`}</div>
       <div class="card"><b>${t("pay")}</b>
         <label class="radio"><input type="radio" name="pay" value="cash" checked> 💵 ${t("cash")}</label>
         <label class="radio"><input type="radio" name="pay" value="knet_on_delivery"> 💳 ${t("knet")}</label></div>
@@ -183,7 +215,8 @@
       ${o.status === "cancelled" ? `<p><span class="st" style="background:${STATUS.cancelled.c}">${STATUS.cancelled[S.lang]}</span></p>` :
       `<div class="timeline">${STATUS_FLOW.map((s, i) => `<div class="tl ${i <= idx ? "done" : ""}"><span class="dot">${i <= idx ? "✓" : ""}</span>${STATUS[s][S.lang]}</div>`).join("")}</div>`}
       ${o.driver_name ? `<div class="card" style="background:#effcfc"><b>🛵 ${t("driver")}: ${esc(o.driver_name)}</b>${o.driver_phone ? `<div style="margin-top:8px"><a class="btn sm tq" href="tel:+${esc(o.driver_phone)}">📞 ${t("call")}</a></div>` : ""}</div>` : ""}
-      <b>${t("items")}</b>${(o.items || []).map((i) => `<div class="line"><span>${esc(S.lang === "en" && i.name_en ? i.name_en : i.name_ar)} × ${i.qty}</span><span>${money(i.price * i.qty, S.lang)}</span></div>`).join("")}
+      <b>${t("items")}</b>${(o.items || []).map((i) => `<div class="line"><span>${esc(S.lang === "en" && i.name_en ? i.name_en : i.name_ar)} × ${i.qty}${(i.opts || []).length ? `<br><small class="mut">${esc(optsTxt(i.opts))}</small>` : ""}</span><span>${money(i.price * i.qty, S.lang)}</span></div>`).join("")}
+      ${Number(o.discount) ? `<div class="line" style="color:#16a34a"><span>🎟️ ${t("discount")}${o.coupon_code ? " (" + esc(o.coupon_code) + ")" : ""}</span><span>−${money(o.discount, S.lang)}</span></div>` : ""}
       <div class="line"><span>${t("delivery")}</span><span>${Number(o.delivery_fee) ? money(o.delivery_fee, S.lang) : t("free")}</span></div><div class="line total"><span>${t("total")}</span><span>${money(o.total, S.lang)}</span></div>
       ${S.settings.whatsapp ? `<a class="btn ghost block" style="margin-top:12px" target="_blank" rel="noopener" href="https://wa.me/${esc(S.settings.whatsapp)}?text=${encodeURIComponent("طلب رقم #" + o.order_no)}">💬 ${t("whats")}</a>` : ""}`);
   }
@@ -191,7 +224,24 @@
     const p = S.products.find((x) => x.id === id); if (!p) return;
     sheet(`<img class="sheet-img" src="${esc(p.image)}" alt=""><h3 style="margin:0 0 4px">${esc(nm(p))}</h3>
       <div><span class="price" style="font-size:19px">${money(p.price, S.lang)}</span>${p.old_price > p.price ? `<span class="old">${money(p.old_price, S.lang)}</span>` : ""} <span class="mut">/ ${esc(nm(p, "unit"))}</span></div>
-      <p class="mut">${esc(nm(p, "desc"))}</p><div id="sq">${qtyCtl(p)}</div>`);
+      <p class="mut">${esc(nm(p, "desc"))}</p>${hasOpts(p) && p.in_stock && S.settings.store_open ? optsForm(p) : `<div id="sq">${qtyCtl(p)}</div>`}`, () => { if (hasOpts(p)) wireOpts(p); });
+  }
+  // اختيارات المنتج (تنضيف، تقطيع، وزن...)
+  function optsForm(p) {
+    const gs = optsOf(p);
+    return `${gs.map((g, gi) => `<div style="margin:12px 0 4px"><b>${esc(g.name)}</b></div><div class="chips wrap">${g.choices.map((c, ci) => `<button type="button" class="chip${ci === 0 ? " on" : ""}" data-og="${gi}" data-oc="${ci}">${esc(c.name)}${Number(c.price) ? ` <small>${Number(c.price) > 0 ? "+" : ""}${money(c.price, S.lang)}</small>` : ""}</button>`).join("")}</div>`).join("")}
+      <div style="display:flex;align-items:center;gap:12px;margin-top:16px"><div class="qty"><button type="button" id="oInc">+</button><b id="oQty">1</b><button type="button" id="oDec">−</button></div>
+      <button class="btn tq" style="flex:1" id="oAdd">${t("addCart")} · <span id="oPrice"></span></button></div>
+      ${qOf(p.id) ? `<p class="mut" style="text-align:center;margin:8px 0 0">🛒 ${qOf(p.id)} ${t("inCart")}</p>` : ""}`;
+  }
+  function wireOpts(p) {
+    const gs = optsOf(p), sel = gs.map(() => 0); let q = 1;
+    const upd = () => { const unit = Math.max(0, Number(p.price) + gs.reduce((a, g, i) => a + Number(g.choices[sel[i]].price || 0), 0)); $("oQty").textContent = q; $("oPrice").textContent = money(unit * q, S.lang); };
+    document.querySelectorAll("[data-og]").forEach((b) => (b.onclick = () => { const gi = +b.dataset.og; sel[gi] = +b.dataset.oc; document.querySelectorAll(`[data-og="${gi}"]`).forEach((x) => x.classList.toggle("on", x === b)); upd(); }));
+    $("oInc").onclick = () => { q = Math.min(99, q + 1); upd(); };
+    $("oDec").onclick = () => { q = Math.max(1, q - 1); upd(); };
+    $("oAdd").onclick = () => { const key = [p.id, ...gs.map((g, i) => g.choices[sel[i]].name)].join("|"); setQty(key, (S.cart[key] || 0) + q); closeSheet(); toast("✓ " + nm(p)); };
+    upd();
   }
 
   function render() {
@@ -232,16 +282,17 @@
     const { notes, slot, payment, ...addr } = p; S.addr = addr; ls.set("ik_addr", addr);
     p.phone = "965" + p.phone;
     p.marketing_opt_in = !!($("f_optin") && $("f_optin").checked); ls.set("ik_optin", p.marketing_opt_in);
-    p.items = cartLines().map((l) => ({ id: l.p.id, qty: l.q }));
+    p.items = cartLines().map((l) => ({ id: l.p.id, qty: l.q, opts: l.opts.map((o) => ({ g: o.g, c: o.c })) }));
+    if (S.coupon) p.coupon = S.coupon.code;
     const btn = $("placeBtn"); btn.disabled = true;
     try {
       const r = await Store.placeOrder(p);
       S.my.unshift({ id: r.id, order_no: r.order_no, total: r.total, created_at: new Date().toISOString() }); ls.set("ik_orders", S.my.slice(0, 50));
-      S.cart = {}; saveCart(); S.view = "orders"; render();
+      S.cart = {}; S.coupon = null; S.slotSel = null; saveCart(); S.view = "orders"; render();
       sheet(`<div class="empty" style="padding:20px 0"><div class="e">✅</div><h2>${t("placed")}</h2><p>${t("orderNo")}: <b>#${r.order_no}</b></p><p>${t("total")}: <b>${money(r.total, S.lang)}</b></p><button class="btn tq block" data-track2="${r.id}">${t("track")}</button>${Store.live && UI.pushState() !== "granted" ? `<button class="btn ghost block" style="margin-top:8px" data-pushc>🔔 ${S.lang === "en" ? "Get offers as notifications" : "فعّل الإشعارات عشان توصلك العروض"}</button>` : ""}</div>`);
     } catch (e) {
       const k = Object.keys(T.ar.errs).find((x) => String(e.message).includes(x));
-      toast(k ? t("errs")[k] : e.message, "err"); btn.disabled = false; if (k === "PRODUCT_UNAVAILABLE" || k === "OUT_OF_STOCK") { await load(); }
+      toast(k ? t("errs")[k] : e.message, "err"); btn.disabled = false; if (k === "PRODUCT_UNAVAILABLE" || k === "OUT_OF_STOCK") { await load(); } if (k && k.startsWith("COUPON")) { S.coupon = null; keepForm(render); }
     }
   }
 
@@ -258,10 +309,14 @@
     if (pc) return customerPush();
     const ed = e.target.closest("[data-ed],[data-editmode]");
     if (ed) { e.stopPropagation(); return onEdit(ed); }
+    if (e.target.id === "cpBtn") return applyCoupon();
+    if (e.target.id === "cpDel") { S.coupon = null; return render(); }
+    const sl = e.target.closest("[data-slot],[data-sday]");
+    if (sl) { if (sl.dataset.sday != null) { S.slotDay = +sl.dataset.sday; const dd = slotDays()[S.slotDay]; if (dd) S.slotSel = `${dd.label} ${dd.times[0]}`; } else S.slotSel = sl.dataset.slot; const bx = $("slotBox"); if (bx) bx.innerHTML = slotPicker(); return; }
     const el = e.target.closest("[data-inc],[data-dec],[data-view],[data-cat],[data-open],[data-lang],[data-track],[data-track2]"); if (!el) return;
     const d = el.dataset;
     if (d.inc) { setQty(d.inc, (S.cart[d.inc] || 0) + 1); refreshSheetQty(d.inc); }
-    else if (d.dec) { setQty(d.dec, (S.cart[d.dec] || 0) - 1); refreshSheetQty(d.dec); }
+    else if (d.dec) { let k = d.dec; if (!S.cart[k]) k = Object.keys(S.cart).filter((x) => x.startsWith(k + "|")).pop() || k; setQty(k, (S.cart[k] || 0) - 1); refreshSheetQty(d.dec); }
     else if (d.view !== undefined) { closeSheet(); S.view = d.view; render(); scrollTo(0, 0); }
     else if (d.cat !== undefined) { S.cat = d.cat || null; render(); }
     else if (d.open) openProduct(d.open);
@@ -306,6 +361,15 @@
     } catch (e) { toast(e.message, "err"); }
   }
 
+  async function applyCoupon() {
+    const code = ($("f_coupon") ? $("f_coupon").value : "").trim().toUpperCase(); if (!code) return;
+    const ph = ($("f_phone") ? $("f_phone").value : "").replace(/\D/g, ""), x = totals();
+    $("cpBtn").disabled = true;
+    try { const r = await Store.checkCoupon(code, x.sub, /^\d{8}$/.test(ph) ? "965" + ph : null); S.coupon = r; toast(t("couponOk")); keepForm(render); }
+    catch (err) { const m = String(err.message), k = Object.keys(T.ar.errs).find((c) => m.includes(c)); toast(k ? t("errs")[k] + (k === "COUPON_MIN" ? ": " + money(Number((m.split(":")[1] || "0").replace(/[^\d.]/g, "")), S.lang) : "") : m, "err"); $("cpBtn").disabled = false; }
+  }
+  // ما نضيّعش اللي الزبون كتبه في الفورم لما الصفحة تتحدث
+  function keepForm(fn) { const vals = {}; document.querySelectorAll("[id^=f_]").forEach((el) => { if (el.type !== "hidden") vals[el.id] = el.type === "checkbox" ? el.checked : el.value; }); fn(); Object.entries(vals).forEach(([id, v]) => { const el = $(id); if (el) { if (el.type === "checkbox") el.checked = v; else el.value = v; } }); }
   function refreshSheetQty(id) { const sq = document.getElementById("sq"); if (sq) { const p = S.products.find((x) => x.id === id); if (p) sq.innerHTML = qtyCtl(p); } }
 
   (async function start() {

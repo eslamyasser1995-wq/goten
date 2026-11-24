@@ -4,7 +4,7 @@
   const C = window.ISLAMKO_CONFIG || {};
   const $ = (id) => document.getElementById(id);
   const A = { tx: [], period: "month", cq: "", cOnlyOpt: true, tab: "dash", me: null, orders: [], products: [], cats: [], banners: [], profiles: [], settings: {}, ofilter: "active", pq: "", bulk: false, known: null };
-  const TABS = [["dash", "📊 الرئيسية"], ["orders", "🧾 الطلبات"], ["accounts", "💰 الحسابات"], ["products", "🐟 المنتجات"], ["cats", "🗂️ الأقسام"], ["banners", "🖼️ البنرات"], ["customers", "👥 الزباين"], ["team", "🛵 المناديب"], ["settings", "⚙️ الإعدادات"]];
+  const TABS = [["dash", "📊 الرئيسية"], ["orders", "🧾 الطلبات"], ["accounts", "💰 الحسابات"], ["products", "🐟 المنتجات"], ["cats", "🗂️ الأقسام"], ["banners", "🖼️ البنرات"], ["coupons", "🎟️ الكوبونات"], ["customers", "👥 الزباين"], ["team", "🛵 المناديب"], ["settings", "⚙️ الإعدادات"]];
   const drivers = () => A.profiles.filter((p) => p.role === "driver");
   const ctx = () => ({ products: A.products, cats: A.cats, banners: A.banners, done: refresh });
   const pname = (id) => (A.profiles.find((p) => p.id === id) || {}).full_name || "—";
@@ -26,8 +26,8 @@
   }
 
   async function loadAll() {
-    const [o, p, c, b, pr, s, ic, tx, mv, sp] = await Promise.all([Store.orders(), Store.products(), Store.categories(), Store.banners(), Store.profiles(), Store.settings(), Store.importedCustomers().catch(() => []), Store.transactions().catch(() => []), Store.stockMoves().catch(() => null), Store.suppliers().catch(() => null)]);
-    Object.assign(A, { orders: o, products: p, cats: c, banners: b, profiles: pr, settings: s || {}, imported: ic || [], tx: tx || [], moves: mv, sups: sp });
+    const [o, p, c, b, pr, s, ic, tx, mv, sp, cp] = await Promise.all([Store.orders(), Store.products(), Store.categories(), Store.banners(), Store.profiles(), Store.settings(), Store.importedCustomers().catch(() => []), Store.transactions().catch(() => []), Store.stockMoves().catch(() => null), Store.suppliers().catch(() => null), Store.coupons().catch(() => null)]);
+    Object.assign(A, { orders: o, products: p, cats: c, banners: b, profiles: pr, settings: s || {}, imported: ic || [], tx: tx || [], moves: mv, sups: sp, cps: cp });
     const ids = new Set(o.map((x) => x.id));
     if (A.known) { const fresh = o.filter((x) => !A.known.has(x.id)); if (fresh.length) { beep(); toast(`🔔 طلب جديد #${fresh[0].order_no}`); } }
     A.known = ids;
@@ -36,7 +36,7 @@
 
   // ---------- الواجهة ----------
   function render() {
-    const body = { dash, orders, accounts, products, cats, banners, customers, team, settings }[A.tab]();
+    const body = { dash, orders, accounts, products, cats, banners, coupons, customers, team, settings }[A.tab]();
     $("app").innerHTML = `<header class="top"><div class="wrap wide"><div class="row"><div class="brand">${LOGO}<div>لوحة التحكم<small>${esc(A.me.full_name || A.me.email || "")} ${Store.live ? "" : '· <span class="demo-tag">تجريبي</span>'}</small></div></div><div class="sp"></div>
       <button class="chip-btn" id="pushBtn">${UI.pushState() === "granted" ? "🔔" : "🔕 فعّل"}</button><a class="chip-btn" href="index.html" target="_blank" style="text-decoration:none">👁️</a><button class="chip-btn" id="outBtn">خروج</button></div>
       <div class="tabs">${TABS.map(([k, l]) => `<button class="${A.tab === k ? "on" : ""}" data-tab="${k}">${l}${k === "orders" && newCount() ? ` (${newCount()})` : ""}</button>`).join("")}</div></div></header>
@@ -65,10 +65,11 @@
   function orderCard(o) {
     const s = STATUS[o.status] || STATUS.new;
     return `<div class="ord" style="border-color:${s.c}"><div class="hd"><b>#${o.order_no} · ${esc(o.customer_name)}</b><span class="st" style="background:${s.c}">${s.ar}</span></div>
-      <div class="mut">${fmtDate(o.created_at)} · ${esc(o.slot || "")} · ${PAY[o.payment] || PAY.cash}</div>
+      <div class="mut">${fmtDate(o.created_at)} · ${PAY[o.payment] || PAY.cash}</div>${o.slot ? `<div style="margin-top:4px"><span class="pill" style="background:#e0f2fe;color:#075985;font-size:13px">⏰ ${esc(o.slot)}</span></div>` : ""}
       <div style="margin-top:6px">📍 ${esc(o.area)} – ق${esc(o.block)} – ش${esc(o.street)}${o.avenue ? " – ج" + esc(o.avenue) : ""} – م${esc(o.house)}${o.floor_apt ? " – " + esc(o.floor_apt) : ""}</div>
-      <div style="margin-top:6px">${(o.items || []).map((i) => `${esc(i.name_ar)} ×${i.qty}`).join("، ")}</div>
+      <div style="margin-top:6px">${(o.items || []).map((i) => `<div>• ${esc(i.name_ar)} ×${i.qty}${(i.opts || []).length ? ` <span class="mut" style="font-size:12px">(${i.opts.map((x) => esc(x.c)).join("، ")})</span>` : ""}</div>`).join("")}</div>
       ${o.notes ? `<div class="notice">📝 ${esc(o.notes)}</div>` : ""}
+      ${Number(o.discount) ? `<div class="line" style="color:#16a34a;font-size:14px"><span>🎟️ خصم ${esc(o.coupon_code || "")}</span><span>−${money(o.discount)}</span></div>` : ""}
       <div class="line total" style="font-size:15px"><span>الإجمالي (شامل التوصيل ${money(o.delivery_fee)})</span><span>${money(o.total)}</span></div>
       <div class="row2" style="margin-top:6px"><select class="in" data-ostatus="${o.id}">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${o.status === k ? "selected" : ""}>${v.ar}</option>`).join("")}</select>
         <select class="in" data-opay="${o.id}">${Object.entries(PAY).map(([k, v]) => `<option value="${k}" ${(o.payment || "cash") === k ? "selected" : ""}>${v}</option>`).join("")}</select>
@@ -104,6 +105,49 @@
   // ---------- الأقسام والبنرات ----------
   function cats() {
     return `<div class="h2">الأقسام <button class="btn tq sm" data-editcat="">+ قسم</button></div><div class="list">${A.cats.map((c) => `<div class="it"><img src="${esc(c.image || "")}" alt=""><div class="t"><b>${esc(c.name_ar)}</b><span class="mut">${esc(c.name_en || "")} · ${A.products.filter((p) => p.category_id === c.id).length} منتج</span>${!c.active ? '<span class="pill r">مخفي</span>' : ""}</div><button class="btn sm ghost" data-editcat="${c.id}">✏️</button></div>`).join("")}</div>`;
+  }
+  // ---------- الكوبونات ----------
+  const CK = { percent: "نسبة %", fixed: "مبلغ ثابت", free_delivery: "توصيل مجاني" };
+  function cpState(c) { const n = Date.now(); if (!c.active) return ["⏸️ موقوف", "#94a3b8"]; if (c.ends_at && n > new Date(c.ends_at)) return ["⌛ انتهى", "#94a3b8"]; if (c.starts_at && n < new Date(c.starts_at)) return ["🕒 لسه مبدأش", "#d97706"]; if (c.max_uses != null && c.uses >= c.max_uses) return ["✅ خلص", "#94a3b8"]; return ["🟢 شغال", "#16a34a"]; }
+  function coupons() {
+    if (A.cps === null) return `<div class="notice">الكوبونات محتاجة تحديث قاعدة البيانات (extras.sql).</div>`;
+    const list = A.cps || [], used = A.orders.filter((o) => o.coupon_code && o.status !== "cancelled");
+    return `<div class="stats"><div class="stat"><span class="mut">كوبونات شغالة</span><b>${list.filter((c) => cpState(c)[0].includes("شغال")).length}</b></div><div class="stat"><span class="mut">طلبات بكوبون</span><b>${used.length}</b></div><div class="stat"><span class="mut">إجمالي الخصومات</span><b style="color:#dc2626">${money(used.reduce((a, o) => a + num(o.discount), 0))}</b></div><div class="stat"><span class="mut">مبيعات بكوبونات</span><b style="color:#16a34a">${money(used.reduce((a, o) => a + num(o.total), 0))}</b></div></div>
+      <button class="btn tq block" data-cpnew style="margin:10px 0">🎟️ + كوبون جديد</button>
+      ${list.length ? list.map((c) => { const [st, col] = cpState(c), ords = used.filter((o) => o.coupon_code === c.code); return `<div class="it" style="background:#fff;border-radius:14px;padding:12px;margin:8px 0;display:block;border-inline-start:5px solid ${col}">
+        <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:20px;letter-spacing:1px;direction:ltr">${esc(c.code)}</b><span class="pill" style="background:${col};color:#fff">${st}</span></div>
+        <div style="margin:6px 0">${c.kind === "percent" ? `خصم <b>${num(c.value)}%</b>${c.max_discount ? ` (أقصى ${money(c.max_discount)})` : ""}` : c.kind === "fixed" ? `خصم <b>${money(c.value)}</b>` : "<b>توصيل مجاني</b>"}${num(c.min_order) ? ` · لطلبات فوق ${money(c.min_order)}` : ""}</div>
+        <div class="mut" style="font-size:13px">استُخدم ${c.uses || 0}${c.max_uses != null ? ` من ${c.max_uses}` : ""} مرة · ${c.once_per_phone ? "مرة واحدة لكل رقم" : "مفتوح لنفس الرقم"}${c.ends_at ? ` · ينتهي ${fmtDate(c.ends_at)}` : ""} · خصومات ${money(ords.reduce((a, o) => a + num(o.discount), 0))}</div>
+        ${c.note ? `<div class="mut" style="font-size:13px">📝 ${esc(c.note)}</div>` : ""}
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><button class="btn sm ghost" data-cpedit="${esc(c.code)}">✏️ تعديل</button><button class="btn sm ghost" data-cptog="${esc(c.code)}">${c.active ? "⏸️ إيقاف" : "▶️ تشغيل"}</button><button class="btn sm ghost" data-cpshare="${esc(c.code)}">📣 ابعته للزباين</button></div></div>`; }).join("") : '<p class="mut">لسه مفيش كوبونات. اعمل كود زي GOTEN10 يدّي خصم 10%.</p>'}`;
+  }
+  function cpSheet(code) {
+    const c = code ? (A.cps || []).find((x) => x.code === code) : { kind: "percent", value: 10, min_order: 0, once_per_phone: true, active: true };
+    const dv = (x) => (x ? new Date(x).toISOString().slice(0, 10) : "");
+    sheet(`<h3>${code ? "✏️ تعديل كوبون" : "🎟️ كوبون جديد"}</h3>
+      <label class="f"><span>الكود *</span><input class="in" id="cp_code" dir="ltr" style="text-transform:uppercase;font-weight:800;letter-spacing:1px" value="${esc(c.code || "")}" ${code ? "readonly" : ""} placeholder="GOTEN10"></label>
+      <label class="f"><span>نوع الخصم</span><select class="in" id="cp_kind">${Object.entries(CK).map(([k, l]) => `<option value="${k}" ${c.kind === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+      <div class="row2"><label class="f" id="cp_vw"><span id="cp_vl">القيمة</span><input class="in" id="cp_value" type="number" step="0.005" min="0" inputmode="decimal" value="${c.value ?? ""}"></label><label class="f" id="cp_mw"><span>أقصى خصم (د.ك)</span><input class="in" id="cp_max" type="number" step="0.005" min="0" inputmode="decimal" value="${c.max_discount ?? ""}" placeholder="بدون حد"></label></div>
+      <div class="row2"><label class="f"><span>أقل طلب (د.ك)</span><input class="in" id="cp_min" type="number" step="0.005" min="0" inputmode="decimal" value="${c.min_order ?? 0}"></label><label class="f"><span>عدد الاستخدامات الكلي</span><input class="in" id="cp_uses" type="number" min="1" inputmode="numeric" value="${c.max_uses ?? ""}" placeholder="مفتوح"></label></div>
+      <div class="row2"><label class="f"><span>يبدأ من</span><input class="in" id="cp_start" type="date" value="${dv(c.starts_at)}"></label><label class="f"><span>ينتهي في</span><input class="in" id="cp_end" type="date" value="${dv(c.ends_at)}"></label></div>
+      <label class="switch"><span>مرة واحدة بس لكل رقم موبايل</span><input type="checkbox" id="cp_once" ${c.once_per_phone ? "checked" : ""}></label>
+      <label class="switch"><span>شغال</span><input type="checkbox" id="cp_active" ${c.active ? "checked" : ""}></label>
+      <label class="f"><span>ملاحظة لنفسك</span><input class="in" id="cp_note" value="${esc(c.note || "")}" placeholder="مثال: عرض رمضان"></label>
+      <button class="btn tq block" id="cpSave">💾 حفظ</button>${code ? `<button class="btn red block" style="margin-top:8px" id="cpDel">🗑️ حذف</button>` : ""}`, () => {
+      const sync = () => { const k = $("cp_kind").value; $("cp_vw").style.display = k === "free_delivery" ? "none" : ""; $("cp_mw").style.display = k === "percent" ? "" : "none"; $("cp_vl").textContent = k === "percent" ? "النسبة %" : "المبلغ (د.ك)"; };
+      $("cp_kind").onchange = sync; sync();
+      $("cpSave").onclick = async () => {
+        const v = (id) => $(id).value.trim(), kind = v("cp_kind");
+        const row = { code: v("cp_code").toUpperCase().replace(/\s/g, ""), kind, value: kind === "free_delivery" ? 0 : num(v("cp_value")), max_discount: kind === "percent" && v("cp_max") ? num(v("cp_max")) : null, min_order: num(v("cp_min")), max_uses: v("cp_uses") ? parseInt(v("cp_uses")) : null,
+          starts_at: v("cp_start") ? new Date(v("cp_start") + "T00:00:00").toISOString() : null, ends_at: v("cp_end") ? new Date(v("cp_end") + "T23:59:59").toISOString() : null, once_per_phone: $("cp_once").checked, active: $("cp_active").checked, note: v("cp_note") || null };
+        if (!/^[A-Z0-9_-]{2,30}$/.test(row.code)) return toast("الكود حروف إنجليزي وأرقام بس (من 2 لـ 30)", "err");
+        if (kind === "percent" && !(row.value > 0 && row.value <= 100)) return toast("النسبة من 1 لـ 100", "err");
+        if (kind === "fixed" && !(row.value > 0)) return toast("اكتب مبلغ الخصم", "err");
+        try { $("cpSave").disabled = true; await Store.saveCoupon(row, !code); closeSheet(); toast("اتحفظ ✓"); await refresh(); }
+        catch (e) { $("cpSave").disabled = false; toast(/duplicate/i.test(e.message) ? "الكود ده موجود قبل كده" : e.message, "err"); }
+      };
+      const dl = $("cpDel"); if (dl) dl.onclick = async () => { if (!(await UI.ask("حذف الكوبون؟ (الطلبات القديمة مش هتتأثر)"))) return; await Store.deleteCoupon(code); closeSheet(); toast("اتحذف"); await refresh(); };
+    });
   }
   function banners() {
     return `<div class="h2">البنرات الإعلانية <button class="btn tq sm" data-editban="">+ بنر</button></div><p class="mut">المقاس المثالي: عرض ضعف الارتفاع (مثلاً 1200×600).</p>
@@ -621,6 +665,10 @@
     return `<div class="card"><label class="switch"><span><b>المتجر مفتوح ويستقبل طلبات</b></span><input type="checkbox" id="s_store_open" ${s.store_open ? "checked" : ""}></label>
       <div class="row3">${fi("delivery_fee", "رسوم التوصيل", "number", 'step="0.005" inputmode="decimal"')}${fi("min_order", "الحد الأدنى", "number", 'step="0.005" inputmode="decimal"')}${fi("free_delivery_over", "توصيل مجاني فوق", "number", 'step="0.005" inputmode="decimal"')}</div>
       ${fi("delivery_eta", "مدة التوصيل اللي بتظهر للزبون (مثال: خلال ساعتين)")}${fi("whatsapp", "واتساب المتجر (مثال 96550000000)", "tel")}${fi("notice_ar", "شريط تنبيه بالعربي")}${fi("notice_en", "Notice in English")}
+      <div class="h2" style="margin-top:14px">⏰ مواعيد التوصيل</div>
+      <label class="switch"><span>يظهر للزبون «بأسرع وقت»</span><input type="checkbox" id="s_allow_asap" ${s.allow_asap !== false ? "checked" : ""}></label>
+      <label class="f"><span>الفترات (كل فترة في سطر)</span><textarea class="in" id="s_slots" rows="5" dir="ltr" style="text-align:right">${esc((Array.isArray(s.slots) ? s.slots : ["10:00 – 12:00", "12:00 – 14:00", "16:00 – 18:00", "18:00 – 20:00", "20:00 – 22:00"]).join("\n"))}</textarea></label>
+      <div class="row2">${fi("slot_days", "يقدر يحجز لكام يوم قدّام", "number", 'min="1" max="7" inputmode="numeric"').replace('value=""', 'value="2"')}${fi("slot_cutoff", "تقفل الفترة قبل بدايتها بكام دقيقة", "number", 'min="0" inputmode="numeric"').replace('value=""', 'value="60"')}</div>
       <button class="btn tq block" id="sSave">💾 حفظ الإعدادات</button></div>
       <div class="card"><b>شكل التطبيق</b><p class="mut">الشعار، اسم المتجر، لون الشريط العلوي.</p><button class="btn sm" data-editheader>🎨 تعديل الشريط العلوي والشعار</button></div>
       ${Store.live ? "" : '<div class="card"><b>الوضع التجريبي</b><p class="mut">البيانات محفوظة على هذا الجهاز فقط. لربط العملاء والمناديب فعلياً فعّل Supabase (راجع الدليل).</p><button class="btn red sm" id="resetBtn">إرجاع البيانات التجريبية الأصلية</button></div>'}`;
@@ -636,15 +684,19 @@
     const pq = $("pq"); if (pq) pq.oninput = (e) => { A.pq = e.target.value; const pos = e.target.selectionStart; render(); $("pq").focus(); $("pq").setSelectionRange(pos, pos); };
     const ss = $("sSave"); if (ss) ss.onclick = async () => {
       const v = (k) => $("s_" + k).value.trim();
-      try { await Store.saveSettings({ store_open: $("s_store_open").checked, delivery_fee: num(v("delivery_fee")), min_order: num(v("min_order")), free_delivery_over: v("free_delivery_over") ? num(v("free_delivery_over")) : null, whatsapp: v("whatsapp").replace(/\D/g, ""), notice_ar: v("notice_ar"), notice_en: v("notice_en"), ...(v("delivery_eta") || A.settings.delivery_eta ? { delivery_eta: v("delivery_eta") || null } : {}) }); toast("تم الحفظ ✓"); await refresh(); } catch (e) { toast(e.message, "err"); }
+      try { await Store.saveSettings({ store_open: $("s_store_open").checked, delivery_fee: num(v("delivery_fee")), min_order: num(v("min_order")), free_delivery_over: v("free_delivery_over") ? num(v("free_delivery_over")) : null, whatsapp: v("whatsapp").replace(/\D/g, ""), notice_ar: v("notice_ar"), notice_en: v("notice_en"), ...(v("delivery_eta") || A.settings.delivery_eta ? { delivery_eta: v("delivery_eta") || null } : {}), ...("slots" in A.settings || !Store.live ? { slots: $("s_slots").value.split(/\n+/).map((x) => x.trim()).filter(Boolean), slot_days: Math.max(1, Math.min(7, parseInt(v("slot_days")) || 2)), slot_cutoff: Math.max(0, parseInt(v("slot_cutoff")) || 0), allow_asap: $("s_allow_asap").checked } : {}) }); toast("تم الحفظ ✓"); await refresh(); } catch (e) { toast(e.message, "err"); }
     };
     const rb = $("resetBtn"); if (rb) rb.onclick = async () => { if (await UI.ask("مسح كل التعديلات والطلبات التجريبية؟")) { await Store.resetDemo(); await refresh(); toast("تم"); } };
   }
   document.addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx],[data-sf],[data-smv],[data-shist],[data-asub],[data-buy],[data-stockpick],[data-newsup],[data-supedit],[data-suppay],[data-supstmt],[data-supbuy],[data-newcust],[data-cpay],[data-csell],[data-cstmt],[data-cedit]"); if (!el || !A.me) return;
+    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx],[data-sf],[data-smv],[data-shist],[data-asub],[data-buy],[data-stockpick],[data-newsup],[data-supedit],[data-suppay],[data-supstmt],[data-supbuy],[data-newcust],[data-cpay],[data-csell],[data-cstmt],[data-cedit],[data-cpnew],[data-cpedit],[data-cptog],[data-cpshare]"); if (!el || !A.me) return;
     const d = el.dataset;
     try {
       if (d.tab) { A.tab = d.tab; render(); scrollTo(0, 0); }
+      else if (d.cpnew !== undefined) cpSheet(null);
+      else if (d.cpedit) cpSheet(d.cpedit);
+      else if (d.cptog) { const c = A.cps.find((x) => x.code === d.cptog); await Store.saveCoupon({ code: c.code, active: !c.active }, false); toast(c.active ? "اتوقف" : "اتشغّل"); await refresh(); }
+      else if (d.cpshare) { const c = A.cps.find((x) => x.code === d.cpshare), off = c.kind === "percent" ? `خصم ${num(c.value)}%` : c.kind === "fixed" ? `خصم ${money(c.value)}` : "توصيل مجاني"; const txt = `🐟 عرض من ${A.settings.store_name || "Goten"}!\n${off}${num(c.min_order) ? ` على الطلبات فوق ${money(c.min_order)}` : ""} بكود: ${c.code}${c.ends_at ? `\nلحد ${fmtDate(c.ends_at)}` : ""}\nاطلب من هنا: ${new URL("index.html", location.href).href}`; try { await navigator.clipboard.writeText(txt); toast("📋 اتنسخت الرسالة – ابعتها من «الزباين» أو واتساب"); } catch (x) { sheet(`<h3>📣 رسالة العرض</h3><textarea class="in" rows="6">${esc(txt)}</textarea>`); } }
       else if (d.stockpick !== undefined) stockPick();
       else if (d.newsup !== undefined) { if (A.sups === null) return toast("شغّل suppliers.sql الأول", "err"); supSheet(null); }
       else if (d.supedit) supSheet(d.supedit);
