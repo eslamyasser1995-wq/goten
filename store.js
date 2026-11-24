@@ -121,7 +121,11 @@
     async init() {
       if (!LIVE) { db(); return; }
       if (!window.supabase) await loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2");
-      sb = window.supabase.createClient(C.SUPABASE_URL, C.SUPABASE_ANON_KEY);
+      sb = window.supabase.createClient(C.SUPABASE_URL, C.SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+      const RECOVERY = /type=recovery/.test(location.hash) || /type=recovery/.test(location.search);
+      Store.recovery = RECOVERY;
+      sb.auth.onAuthStateChange((ev) => { if (ev === "PASSWORD_RECOVERY") { Store.recovery = true; if (Store._onRecovery) Store._onRecovery(); } });
+      if (RECOVERY) await sb.auth.getSession();
     },
     onChange(cb) { // تحديث تلقائي
       if (!LIVE) window.addEventListener("storage", (e) => { if (e.key === KEY) { mem = null; cb(); } });
@@ -214,7 +218,12 @@
       const p = (await sb.from("profiles").select("*").eq("id", data.user.id).maybeSingle()).data;
       return p || { id: data.user.id, role: "pending", email: data.user.email };
     },
-    async signIn(email, password) { if (!LIVE) throw new Error("DEMO"); chk(await sb.auth.signInWithPassword({ email, password })); },
+    async signIn(email, password) { if (!LIVE) throw new Error("DEMO"); chk(await sb.auth.signInWithPassword({ email, password })); UI.saveEmail(email); },
+    async resetPassword(email) {
+      if (!LIVE) throw new Error("مش متاح في الوضع التجريبي");
+      chk(await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname }));
+    },
+    async setNewPassword(pw) { chk(await sb.auth.updateUser({ password: pw })); Store.recovery = false; history.replaceState(null, "", location.pathname); },
     async signUp(email, password, full_name, phone) { if (!LIVE) throw new Error("DEMO"); return chk(await sb.auth.signUp({ email, password, options: { data: { full_name, phone } } })); },
     async signOut() { if (LIVE) await sb.auth.signOut(); else sess.set(null); },
     demoLogin(user) { sess.set(user); },

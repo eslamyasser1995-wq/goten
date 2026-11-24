@@ -8,11 +8,13 @@
     let demoList = "";
     if (!Store.live) { const ps = (await Store.profiles()).filter((p) => p.role === "driver"); demoList = ps.map((p) => `<button class="btn ghost block" style="margin:6px 0" data-demo="${p.id}">🛵 ${esc(p.full_name)}</button>`).join("") || '<p class="mut">لا يوجد مناديب – أضفهم من لوحة التحكم.</p>'; }
     $("app").innerHTML = `<div class="login"><div class="brand" style="justify-content:center;color:var(--navy);font-size:22px;margin-bottom:6px">${LOGO}<span>مناديب Goten</span></div>${msg ? `<div class="notice">${msg}</div>` : ""}
-      ${Store.live ? `<div class="card"><label class="f"><span>البريد الإلكتروني</span><input class="in" id="em" type="email" autocomplete="username"></label><label class="f"><span>كلمة المرور</span><input class="in" id="pw" type="password" autocomplete="current-password"></label><button class="btn block" id="inBtn">دخول</button></div>
+      ${Store.live ? `<div class="card"><label class="f"><span>البريد الإلكتروني</span><input class="in" id="em" type="email" autocomplete="username" value="${esc(UI.lastEmail())}"></label><label class="f"><span>كلمة المرور</span><input class="in" id="pw" type="password" autocomplete="current-password" enterkeyhint="go"></label><button class="btn block" id="inBtn">دخول</button><button class="btn ghost block" style="margin-top:8px" data-forgot>🔑 نسيت كلمة السر؟</button></div>
         <details class="card"><summary><b>مندوب جديد؟ سجّل هنا</b></summary><label class="f"><span>الاسم</span><input class="in" id="nn"></label><label class="f"><span>رقم الهاتف</span><input class="in" id="np" type="tel" inputmode="numeric" placeholder="5xxxxxxx"></label><p class="mut">اكتب البريد وكلمة المرور فوق ثم اضغط:</p><button class="btn tq block" id="upBtn">إنشاء حساب</button></details>`
       : `<div class="card"><span class="demo-tag">وضع تجريبي</span><p class="mut">اختر المندوب:</p>${demoList}</div>`}</div>`;
     if (Store.live) {
-      $("inBtn").onclick = async () => { try { await Store.signIn($("em").value.trim(), $("pw").value); boot(); } catch (e) { toast(e.message, "err"); } };
+      $("inBtn").onclick = async () => { const em = $("em").value.trim(), pw = $("pw").value; if (!em || !pw) return toast("اكتب الإيميل وكلمة السر", "err"); $("inBtn").disabled = true; try { await Store.signIn(em, pw); boot(); } catch (e) { $("inBtn").disabled = false; toast(/Invalid login/i.test(e.message) ? "الإيميل أو كلمة السر غلط – جرّب «نسيت كلمة السر»" : /not confirmed/i.test(e.message) ? "الإيميل لسه متأكدش" : e.message, "err"); } };
+      $("pw").onkeydown = (e) => { if (e.key === "Enter") $("inBtn").click(); };
+      if (UI.lastEmail()) setTimeout(() => $("pw").focus(), 50);
       $("upBtn").onclick = async () => { const ph = $("np").value.replace(/\D/g, ""); if (!$("nn").value.trim() || ph.length !== 8) return toast("اكتب الاسم ورقم من 8 أرقام", "err"); try { await Store.signUp($("em").value.trim(), $("pw").value, $("nn").value.trim(), "965" + ph); toast("تم التسجيل – انتظر موافقة الإدارة"); } catch (e) { toast(e.message, "err"); } };
     }
   }
@@ -67,5 +69,5 @@
     if (me.role !== "driver") return loginView(me.role === "pending" ? "حسابك قيد المراجعة – الإدارة لازم توافق عليه أولاً." : "هذا الحساب ليس حساب مندوب.");
     D.me = me; await refresh();
   }
-  (async () => { try { await Store.init(); await boot(); } catch (e) { toast(e.message, "err"); } Store.onChange(() => { if (D.me) refresh().catch(() => {}); }); })();
+  (async () => { try { await Store.init(); await boot(); Store._onRecovery = () => UI.recover(() => boot()); if (Store.recovery) Store._onRecovery(); } catch (e) { toast(e.message, "err"); } Store.onChange(() => { if (D.me) refresh().catch(() => {}); }); })();
 })();
