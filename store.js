@@ -87,6 +87,7 @@
     const disc = c.kind === "percent" ? Math.min(Math.round(sub * c.value * 10) / 1000, c.max_discount != null ? Number(c.max_discount) : sub) : c.kind === "fixed" ? Math.min(Number(c.value), sub) : 0;
     return { code: c.code, kind: c.kind, discount: disc, free_delivery: c.kind === "free_delivery" };
   }
+  function demoPts(ph) { return Math.max(0, db().orders.filter((o) => o.phone === ph).reduce((a, o) => a + (o.status === "delivered" ? Number(o.points_earned || 0) : 0) - (o.status !== "cancelled" ? Number(o.points_used || 0) : 0), 0)); }
   function demoPlace(p) {
     const d = db(), s = d.settings;
     if (!s.store_open) throw new Error("STORE_CLOSED");
@@ -106,8 +107,10 @@
     if (sub < (s.min_order || 0)) throw new Error("MIN_ORDER");
     let fee = s.free_delivery_over && sub >= s.free_delivery_over ? 0 : Number(s.delivery_fee || 0), disc = 0, cc = null;
     if (p.coupon) { const r = demoCoupon(p.coupon, sub, p.phone); disc = r.discount; if (r.free_delivery) fee = 0; cc = r.code; const c = d.coupons.find((x) => x.code === cc); c.uses = (c.uses || 0) + 1; }
-    const { coupon, ...rest } = p;
-    const o = { ...rest, id: uid(), order_no: d.nextNo++, items, subtotal: sub, delivery_fee: fee, discount: disc, coupon_code: cc, total: Math.max(0, sub - disc + fee), status: "new", driver_id: null, created_at: nowISO(), updated_at: nowISO() };
+    let pts = 0, pdisc = 0;
+    if (p.use_points && s.points_on !== false) { const bal = demoPts(p.phone), pv = Number(s.point_value || 0.01); if (bal >= Number(s.points_min || 0) && bal > 0) { pts = Math.min(bal, Math.floor(Math.max(0, sub - disc) / pv)); pdisc = Math.round(pts * pv * 1000) / 1000; } }
+    const { coupon, use_points, ...rest } = p;
+    const o = { ...rest, id: uid(), order_no: d.nextNo++, items, subtotal: sub, delivery_fee: fee, discount: disc, coupon_code: cc, points_used: pts, points_disc: pdisc, points_earned: 0, total: Math.max(0, sub - disc - pdisc + fee), status: "new", driver_id: null, created_at: nowISO(), updated_at: nowISO() };
     d.orders.unshift(o); demoOrderStock(o, -1, "sale", "طلب #"); persist();
     return { id: o.id, order_no: o.order_no, total: o.total };
   }
@@ -178,7 +181,16 @@
       return { ...o, driver_name: dr && dr.full_name, driver_phone: dr && dr.phone };
     },
     async orders() { return LIVE ? chk(await sb.from("orders").select("*").order("created_at", { ascending: false }).limit(300)) : db().orders; },
-    async updateOrder(id, patch) { patch = { ...patch, updated_at: nowISO() }; if (LIVE) return chk(await sb.from("orders").update(patch).eq("id", id)); const o = db().orders.find((x) => x.id === id); const was = o.status; Object.assign(o, patch); if (patch.status === "cancelled" && was !== "cancelled") demoOrderStock(o, 1, "return", "إلغاء طلب #"); else if (patch.status && was === "cancelled" && patch.status !== "cancelled") demoOrderStock(o, -1, "sale", "رجوع طلب #"); persist(); },
+    async myPoints(ph) {
+      if (LIVE) return chk(await sb.rpc("my_points", { ph }));
+      const s = db().settings, b = demoPts(ph), pv = Number(s.point_value == null ? 0.01 : s.point_value);
+      return { on: s.points_on !== false, points: b, value: Math.round(b * pv * 1000) / 1000, point_value: pv, per_kd: Number(s.points_per_kd == null ? 1 : s.points_per_kd), min: Number(s.points_min == null ? 100 : s.points_min) };
+    },
+    async rateOrder(id, stars, note) {
+      if (LIVE) return chk(await sb.rpc("rate_order", { oid: id, stars, note: note || null }));
+      const o = db().orders.find((x) => x.id === id); if (!o || o.status !== "delivered" || o.rating) throw new Error("NOT_ALLOWED"); Object.assign(o, { rating: stars, rating_note: note || null, rated_at: nowISO() }); persist();
+    },
+    async updateOrder(id, patch) { if (!LIVE && patch.status) { const o0 = db().orders.find((x) => x.id === id), st = db().settings; if (o0 && patch.status === "delivered" && o0.status !== "delivered") patch.points_earned = st.points_on === false ? 0 : Math.floor(Math.max(0, Number(o0.total) - Number(o0.delivery_fee || 0)) * Number(st.points_per_kd == null ? 1 : st.points_per_kd)); else if (o0 && o0.status === "delivered" && patch.status !== "delivered") patch.points_earned = 0; } patch = { ...patch, updated_at: nowISO() }; if (LIVE) return chk(await sb.from("orders").update(patch).eq("id", id)); const o = db().orders.find((x) => x.id === id); const was = o.status; Object.assign(o, patch); if (patch.status === "cancelled" && was !== "cancelled") demoOrderStock(o, 1, "return", "إلغاء طلب #"); else if (patch.status && was === "cancelled" && patch.status !== "cancelled") demoOrderStock(o, -1, "sale", "رجوع طلب #"); persist(); },
     async deleteOrder(id) {
       if (LIVE) return chk(await sb.from("orders").delete().eq("id", id));
       const d = db(), o = d.orders.find((x) => x.id === id); if (o && o.status !== "cancelled") demoOrderStock(o, 1, "return", "حذف طلب #"); d.orders = d.orders.filter((x) => x.id !== id); persist();

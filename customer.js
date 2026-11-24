@@ -5,7 +5,8 @@
     ar: { tag: "أسماك ومأكولات بحرية طازجة", search: "ابحث عن سمك، روبيان...", cats: "الأقسام", all: "الكل", offers: "عروض مميزة", products: "المنتجات", add: "أضف", out: "نفدت الكمية", home: "الرئيسية", cart: "السلة", orders: "طلباتي", viewCart: "عرض السلة", emptyCart: "سلتك فاضية", startShop: "ابدأ التسوق", subtotal: "المجموع", delivery: "التوصيل", free: "مجاني", total: "الإجمالي", checkout: "إتمام الطلب", minOrder: "الحد الأدنى للطلب", freeOver: "توصيل مجاني للطلبات فوق", name: "الاسم", phone: "رقم الهاتف", area: "المنطقة", chooseArea: "اختر المنطقة", block: "قطعة", street: "شارع", avenue: "جادة", house: "منزل / مبنى", floor: "الدور / الشقة", notes: "ملاحظات (تنظيف، تقطيع...)", slot: "وقت التوصيل", asap: "بأسرع وقت", pay: "طريقة الدفع", cash: "كاش عند الاستلام", knet: "كي نت عند الاستلام (جهاز المندوب)", place: "تأكيد الطلب", placed: "تم استلام طلبك!", orderNo: "رقم الطلب", track: "تتبع الطلب", noOrders: "ما عندك طلبات لسه", closed: "المتجر مغلق حالياً", driver: "المندوب", call: "اتصال", items: "المنتجات", back: "رجوع", required: "عبّي الحقول المطلوبة", phoneBad: "رقم الهاتف لازم 8 أرقام", lang: "English", addr: "عنوان التوصيل", whats: "واتساب", qty: "الكمية", today: "اليوم", tomorrow: "بكرة", noRes: "ما في نتائج", optin: "أوافق على استلام العروض والخصومات على الواتساب", cats2: "التصنيفات", status: "حالة الطلب", account: "حسابي", review: "مراجعة الطلب", addCart: "أضف إلى السلة", busy: "الفرع مشغول حالياً", deliverTo: "التوصيل إلى:", pickArea: "اختر منطقتك", eta: "توصيل نفس اليوم", other: "منتجات أخرى", seeAll: "الكل", myAddr: "عنواني", noAddr: "لسه ماسجلتش عنوان – هيتحفظ أول ما تطلب", contact: "تواصل معانا", installApp: "ضيف التطبيق للشاشة الرئيسية", installHint: "من Safari: زرار المشاركة ⬆️ ← إضافة إلى الشاشة الرئيسية", notif: "إشعارات العروض", langLbl: "اللغة", editAddr: "تعديل العنوان", save: "حفظ", coupon: "كود خصم", apply: "تطبيق", remove: "إزالة", discount: "الخصم", couponOk: "تم تطبيق الكود ✓", choose: "اختار", inCart: "في السلة", day: "اليوم", pickTime: "اختار الوقت", noSlots: "مفيش مواعيد متاحة", afterTomorrow: "بعد بكرة", errs: { COUPON_INVALID: "الكود غلط أو مش شغال", COUPON_EXPIRED: "الكود انتهت صلاحيته", COUPON_LIMIT: "الكود خلص عدد استخداماته", COUPON_USED: "استخدمت الكود ده قبل كده", COUPON_MIN: "الكود محتاج طلب بحد أدنى", STORE_CLOSED: "المتجر مغلق حالياً", PRODUCT_UNAVAILABLE: "منتج في سلتك لم يعد متوفراً", OUT_OF_STOCK: "الكمية المطلوبة أكبر من المتوفر", MIN_ORDER: "الطلب أقل من الحد الأدنى", EMPTY: "السلة فاضية" } },
     en: { tag: "Fresh fish & seafood", search: "Search fish, shrimp...", cats: "Categories", all: "All", offers: "Special offers", products: "Products", add: "Add", out: "Out of stock", home: "Home", cart: "Cart", orders: "Orders", viewCart: "View cart", emptyCart: "Your cart is empty", startShop: "Start shopping", subtotal: "Subtotal", delivery: "Delivery", free: "Free", total: "Total", checkout: "Checkout", minOrder: "Minimum order", freeOver: "Free delivery over", name: "Name", phone: "Phone", area: "Area", chooseArea: "Choose area", block: "Block", street: "Street", avenue: "Avenue", house: "House / Building", floor: "Floor / Apt", notes: "Notes (cleaning, cutting...)", slot: "Delivery time", asap: "As soon as possible", pay: "Payment", cash: "Cash on delivery", knet: "KNET on delivery (driver's machine)", place: "Place order", placed: "Order received!", orderNo: "Order no.", track: "Track order", noOrders: "No orders yet", closed: "Store is closed now", driver: "Driver", call: "Call", items: "Items", back: "Back", required: "Please fill the required fields", phoneBad: "Phone must be 8 digits", lang: "عربي", addr: "Delivery address", whats: "WhatsApp", qty: "Qty", today: "Today", tomorrow: "Tomorrow", noRes: "No results", optin: "Send me offers & discounts on WhatsApp", cats2: "Categories", status: "Order status", account: "Account", review: "Review order", addCart: "Add to cart", busy: "Store is busy now", deliverTo: "Deliver to:", pickArea: "Choose your area", eta: "Same-day delivery", other: "More products", seeAll: "All", myAddr: "My address", noAddr: "No address yet – it will be saved with your first order", contact: "Contact us", installApp: "Add the app to your Home Screen", installHint: "In Safari: Share ⬆️ → Add to Home Screen", notif: "Offer notifications", langLbl: "Language", editAddr: "Edit address", save: "Save", coupon: "Promo code", apply: "Apply", remove: "Remove", discount: "Discount", couponOk: "Code applied ✓", choose: "Choose", inCart: "in cart", day: "Day", pickTime: "Pick a time", noSlots: "No slots available", afterTomorrow: "Day after", errs: { COUPON_INVALID: "Invalid code", COUPON_EXPIRED: "Code expired", COUPON_LIMIT: "Code fully used", COUPON_USED: "You already used this code", COUPON_MIN: "Code needs a higher minimum order", STORE_CLOSED: "Store is closed now", PRODUCT_UNAVAILABLE: "An item in your cart is no longer available", OUT_OF_STOCK: "Requested quantity is more than available", MIN_ORDER: "Order is below the minimum", EMPTY: "Cart is empty" } }
   };
-  const S = { lang: ls.get("ik_lang", "ar"), cart: ls.get("ik_cart", {}), my: ls.get("ik_orders", []), addr: ls.get("ik_addr", {}), view: "home", searchOpen: false, edit: false, all: { p: [], c: [], b: [] }, cat: null, q: "", products: [], cats: [], banners: [], settings: {} };
+  const L = (ar, en) => (S.lang === "en" ? en : ar);
+  const S = { pts: null, usePts: false, lang: ls.get("ik_lang", "ar"), cart: ls.get("ik_cart", {}), my: ls.get("ik_orders", []), addr: ls.get("ik_addr", {}), view: "home", searchOpen: false, edit: false, all: { p: [], c: [], b: [] }, cat: null, q: "", products: [], cats: [], banners: [], settings: {} };
   const t = (k) => T[S.lang][k];
   const nm = (o, f = "name") => (S.lang === "en" && o[f + "_en"]) || o[f + "_ar"] || "";
   const $ = (id) => document.getElementById(id);
@@ -37,7 +38,9 @@
     let fee = s.free_delivery_over && sub >= s.free_delivery_over ? 0 : Number(s.delivery_fee || 0);
     const c = S.coupon; let disc = 0;
     if (c) { if (c.kind === "free_delivery") fee = 0; else disc = Math.min(sub, Number(c.discount || 0)); }
-    return { sub, fee, disc, total: Math.max(0, sub - disc + fee) };
+    let pts = 0, pd = 0; const P = S.pts;
+    if (S.usePts && P && P.on && P.points > 0 && P.points >= Number(P.min || 0) && Number(P.point_value) > 0) { pts = Math.min(P.points, Math.floor(Math.max(0, sub - disc) / Number(P.point_value))); pd = Math.round(pts * Number(P.point_value) * 1000) / 1000; }
+    return { sub, fee, disc, pts, pd, total: Math.max(0, sub - disc - pd + fee) };
   }
   function setQty(key, q) {
     const id = key.split("|")[0], p = S.products.find((x) => x.id === id), max = p && p.stock != null ? Math.floor(Number(p.stock)) : 99;
@@ -128,6 +131,7 @@
     const a = S.addr, s = S.settings, standalone = navigator.standalone || matchMedia("(display-mode: standalone)").matches;
     return `<div class="wrap"><div class="h2">${t("account")}</div>
       <div class="card"><b>📍 ${t("myAddr")}</b>${a.customer_name ? `<p style="margin:8px 0 0">${esc(a.customer_name)} · +965 ${esc(a.phone || "")}<br><span class="mut">${esc(a.area || "")} – ${t("block")} ${esc(a.block || "")} – ${t("street")} ${esc(a.street || "")}${a.avenue ? " – " + t("avenue") + " " + esc(a.avenue) : ""} – ${t("house")} ${esc(a.house || "")}</span></p>` : `<p class="mut">${t("noAddr")}</p>`}</div>
+      ${S.pts && S.pts.on ? `<div class="card" style="background:#fffbeb;border:1px solid #fde68a"><b>⭐ ${L("نقاطك", "Your points")}: ${S.pts.points}</b><p class="mut" style="margin:6px 0 0">${L(`= ${money(S.pts.value, S.lang)} خصم. كل 1 د.ك تشتري بيه = ${S.pts.per_kd} نقطة، وتقدر تستخدمها من ${S.pts.min} نقطة وانت بتطلب.`, `= ${money(S.pts.value, S.lang)} off. Earn ${S.pts.per_kd} pts per 1 KD; redeem from ${S.pts.min} pts at checkout.`)}</p></div>` : ""}
       <div class="card menu">
         <button data-view="orders"><span>🧾 ${t("orders")}</span><span class="chev">‹</span></button>
         ${Store.live ? `<button data-pushc><span>${UI.pushState() === "granted" ? "🔔" : "🔕"} ${t("notif")}</span><span class="chev">‹</span></button>` : ""}
@@ -144,7 +148,7 @@
   }
   function summary() {
     const x = totals();
-    return `<div class="line"><span>${t("subtotal")}</span><b>${money(x.sub, S.lang)}</b></div><div class="line"><span>${t("delivery")}</span><b>${x.fee ? money(x.fee, S.lang) : t("free")}</b></div>${x.disc ? `<div class="line" style="color:#16a34a"><span>🎟️ ${t("discount")} (${esc(S.coupon.code)})</span><b>−${money(x.disc, S.lang)}</b></div>` : ""}<div class="line total"><span>${t("total")}</span><span>${money(x.total, S.lang)}</span></div>`;
+    return `<div class="line"><span>${t("subtotal")}</span><b>${money(x.sub, S.lang)}</b></div><div class="line"><span>${t("delivery")}</span><b>${x.fee ? money(x.fee, S.lang) : t("free")}</b></div>${x.disc ? `<div class="line" style="color:#16a34a"><span>🎟️ ${t("discount")} (${esc(S.coupon.code)})</span><b>−${money(x.disc, S.lang)}</b></div>` : ""}${x.pd ? `<div class="line" style="color:#16a34a"><span>⭐ ${L("خصم النقاط", "Points discount")} (${x.pts})</span><b>−${money(x.pd, S.lang)}</b></div>` : ""}<div class="line total"><span>${t("total")}</span><span>${money(x.total, S.lang)}</span></div>`;
   }
   function cart() {
     const lines = cartLines();
@@ -179,6 +183,18 @@
       ${days.length ? `<div class="chips">${days.map((d, i) => `<button type="button" class="chip${S.slotDay === i ? " on" : ""}" data-sday="${i}">${esc(d.label)}</button>`).join("")}</div>
       <div class="chips">${(days[S.slotDay] || days[0]).times.map((tm) => { const v = `${(days[S.slotDay] || days[0]).label} ${tm}`; return chip(v, "🕒 " + tm, cur === v); }).join("")}</div>` : `<p class="mut">${t("noSlots")}</p>`}`;
   }
+  function ptsCard() {
+    const P = S.pts; if (!P || !P.on) return "";
+    const ok = P.points > 0 && P.points >= Number(P.min || 0);
+    return `<div class="card" style="background:#fffbeb;border:1px solid #fde68a"><b>⭐ ${L("نقاطك", "Your points")}: ${P.points} <span class="mut">(= ${money(P.value, S.lang)})</span></b>
+      ${ok ? `<label class="radio" style="margin-top:8px"><input type="checkbox" id="usePts" ${S.usePts ? "checked" : ""} style="width:20px;height:20px;accent-color:var(--tq)"> ${L("استخدم نقاطي كخصم على الطلب ده", "Use my points on this order")}</label>`
+        : `<p class="mut" style="margin:6px 0 0">${L(`تقدر تستخدم النقاط لما توصل ${P.min} نقطة. كل 1 د.ك = ${P.per_kd} نقطة.`, `Redeem from ${P.min} points. Every 1 KD = ${P.per_kd} pts.`)}</p>`}</div>`;
+  }
+  async function loadPts(ph8, rerender) {
+    if (!/^[124569]\d{7}$/.test(ph8 || "")) { S.pts = null; S.usePts = false; return; }
+    try { S.pts = await Store.myPoints("965" + ph8); } catch (e) { S.pts = null; }
+    if (rerender && (S.view === "checkout" || S.view === "account")) keepForm(render);
+  }
   function checkout() {
     const a = S.addr;
     const f = (id, label, req, type = "text", extra = "") => `<label class="f"><span>${label}${req ? " *" : ""}</span><input class="in" id="f_${id}" type="${type}" value="${esc(a[id] || "")}" ${extra}></label>`;
@@ -191,6 +207,7 @@
         <label class="f"><span>${t("notes")}</span><textarea class="in" id="f_notes" rows="2"></textarea></label></div>
       <div class="card"><b>${t("slot")}</b><div id="slotBox">${slotPicker()}</div></div>
       <div class="card"><b>🎟️ ${t("coupon")}</b>${S.coupon ? `<div class="line" style="color:#16a34a"><span>✓ ${esc(S.coupon.code)}</span><button class="btn ghost sm" id="cpDel">${t("remove")}</button></div>` : `<div class="row2" style="margin-top:8px;grid-template-columns:1fr auto"><input class="in" id="f_coupon" placeholder="GOTEN10" autocapitalize="characters" style="text-transform:uppercase"><button class="btn sm" id="cpBtn">${t("apply")}</button></div>`}</div>
+      ${ptsCard()}
       <div class="card"><b>${t("pay")}</b>
         <label class="radio"><input type="radio" name="pay" value="cash" checked> 💵 ${t("cash")}</label>
         <label class="radio"><input type="radio" name="pay" value="knet_on_delivery"> 💳 ${t("knet")}</label></div>
@@ -217,7 +234,12 @@
       ${o.driver_name ? `<div class="card" style="background:#effcfc"><b>🛵 ${t("driver")}: ${esc(o.driver_name)}</b>${o.driver_phone ? `<div style="margin-top:8px"><a class="btn sm tq" href="tel:+${esc(o.driver_phone)}">📞 ${t("call")}</a></div>` : ""}</div>` : ""}
       <b>${t("items")}</b>${(o.items || []).map((i) => `<div class="line"><span>${esc(S.lang === "en" && i.name_en ? i.name_en : i.name_ar)} × ${i.qty}${(i.opts || []).length ? `<br><small class="mut">${esc(optsTxt(i.opts))}</small>` : ""}</span><span>${money(i.price * i.qty, S.lang)}</span></div>`).join("")}
       ${Number(o.discount) ? `<div class="line" style="color:#16a34a"><span>🎟️ ${t("discount")}${o.coupon_code ? " (" + esc(o.coupon_code) + ")" : ""}</span><span>−${money(o.discount, S.lang)}</span></div>` : ""}
+      ${Number(o.points_disc) ? `<div class="line" style="color:#16a34a"><span>⭐ ${L("خصم النقاط", "Points discount")} (${o.points_used})</span><span>−${money(o.points_disc, S.lang)}</span></div>` : ""}
       <div class="line"><span>${t("delivery")}</span><span>${Number(o.delivery_fee) ? money(o.delivery_fee, S.lang) : t("free")}</span></div><div class="line total"><span>${t("total")}</span><span>${money(o.total, S.lang)}</span></div>
+      ${o.status === "delivered" && Number(o.points_earned) ? `<div class="notice" style="background:#fffbeb;border-color:#fde68a">⭐ ${L(`كسبت ${o.points_earned} نقطة من الطلب ده`, `You earned ${o.points_earned} points`)}</div>` : ""}
+      ${o.status === "delivered" ? (o.rating ? `<div class="card" style="text-align:center"><b>${L("تقييمك", "Your rating")}</b><div style="font-size:26px">${"⭐".repeat(o.rating)}</div>${o.rating_note ? `<p class="mut">«${esc(o.rating_note)}»</p>` : ""}</div>`
+        : `<div class="card" style="text-align:center"><b>${L("قيّم طلبك 🙏", "Rate your order 🙏")}</b><div id="rStars" style="font-size:34px;letter-spacing:4px;margin:8px 0;cursor:pointer">${[1, 2, 3, 4, 5].map((n) => `<span data-star="${n}">☆</span>`).join("")}</div>
+          <textarea class="in" id="rNote" rows="2" maxlength="300" placeholder="${L("رأيك في السمك والتوصيل (اختياري)", "Comments (optional)")}"></textarea><button class="btn tq block" style="margin-top:8px" id="rSend" data-oid="${o.id}" disabled>${L("إرسال التقييم", "Send rating")}</button></div>`) : ""}
       ${S.settings.whatsapp ? `<a class="btn ghost block" style="margin-top:12px" target="_blank" rel="noopener" href="https://wa.me/${esc(S.settings.whatsapp)}?text=${encodeURIComponent("طلب رقم #" + o.order_no)}">💬 ${t("whats")}</a>` : ""}`);
   }
   function openProduct(id) {
@@ -253,6 +275,8 @@
       `<nav class="nav shop-nav"><div class="wrap">${[["home", IC.home, t("home")], ["cats", IC.cats, t("cats2")], ["orders", IC.status, t("status")], ["cart", IC.cart, t("cart")], ["account", IC.user, t("account")]].map(([v, i, l]) => `<button class="${navOn(v) ? "on" : ""}" data-view="${v}"><i>${i}</i>${l}${v === "cart" && n ? `<span class="cnt">${n}</span>` : ""}</button>`).join("")}</div></nav>`;
     const q = $("q"); if (q) { q.oninput = (e) => { S.q = e.target.value; const pos = e.target.selectionStart; render(); const q2 = $("q"); q2.focus(); q2.setSelectionRange(pos, pos); }; }
     const pb = $("placeBtn"); if (pb) pb.onclick = place;
+    const fp = $("f_phone"); if (fp) fp.oninput = () => { const v = fp.value.replace(/\D/g, ""); if (v.length === 8 && (!S.pts || S.ptsFor !== v)) { S.ptsFor = v; loadPts(v, true); } };
+    const up = $("usePts"); if (up) up.onchange = () => { S.usePts = up.checked; keepForm(render); };
     if (S.view === "orders") fillStatuses();
     // ارتفاع الهيدر علشان تبويبات الأقسام تثبت تحته
     if (S.settings.header_color) document.documentElement.style.setProperty("--acc", S.settings.header_color);
@@ -284,19 +308,21 @@
     p.marketing_opt_in = !!($("f_optin") && $("f_optin").checked); ls.set("ik_optin", p.marketing_opt_in);
     p.items = cartLines().map((l) => ({ id: l.p.id, qty: l.q, opts: l.opts.map((o) => ({ g: o.g, c: o.c })) }));
     if (S.coupon) p.coupon = S.coupon.code;
+    if (S.usePts) p.use_points = true;
     const btn = $("placeBtn"); btn.disabled = true;
     try {
       const r = await Store.placeOrder(p);
       S.my.unshift({ id: r.id, order_no: r.order_no, total: r.total, created_at: new Date().toISOString() }); ls.set("ik_orders", S.my.slice(0, 50));
-      S.cart = {}; S.coupon = null; S.slotSel = null; saveCart(); S.view = "orders"; render();
-      sheet(`<div class="empty" style="padding:20px 0"><div class="e">✅</div><h2>${t("placed")}</h2><p>${t("orderNo")}: <b>#${r.order_no}</b></p><p>${t("total")}: <b>${money(r.total, S.lang)}</b></p><button class="btn tq block" data-track2="${r.id}">${t("track")}</button>${Store.live && UI.pushState() !== "granted" ? `<button class="btn ghost block" style="margin-top:8px" data-pushc>🔔 ${S.lang === "en" ? "Get offers as notifications" : "فعّل الإشعارات عشان توصلك العروض"}</button>` : ""}</div>`);
+      S.cart = {}; S.coupon = null; S.slotSel = null; S.usePts = false; S.pts = null; saveCart();
+      if (Store.live && UI.pushState() === "granted") UI.enablePush((sub) => Store.saveCustomerPush(sub, p.phone)).catch(() => {}); S.view = "orders"; render();
+      sheet(`<div class="empty" style="padding:20px 0"><div class="e">✅</div><h2>${t("placed")}</h2><p>${t("orderNo")}: <b>#${r.order_no}</b></p><p>${t("total")}: <b>${money(r.total, S.lang)}</b></p><button class="btn tq block" data-track2="${r.id}">${t("track")}</button>${Store.live && UI.pushState() !== "granted" ? `<button class="btn ghost block" style="margin-top:8px" data-pushc>🔔 ${S.lang === "en" ? "Get order updates & offers as notifications" : "فعّل الإشعارات عشان يوصلك حالة طلبك والعروض"}</button>` : ""}</div>`);
     } catch (e) {
       const k = Object.keys(T.ar.errs).find((x) => String(e.message).includes(x));
       toast(k ? t("errs")[k] : e.message, "err"); btn.disabled = false; if (k === "PRODUCT_UNAVAILABLE" || k === "OUT_OF_STOCK") { await load(); } if (k && k.startsWith("COUPON")) { S.coupon = null; keepForm(render); }
     }
   }
 
-  document.addEventListener("click", (e) => {
+  document.addEventListener("click", async (e) => {
     const x = e.target.closest("[data-search],[data-area],[data-jump],[data-gocat]");
     if (x) {
       if (x.hasAttribute("data-search")) { S.searchOpen = !S.searchOpen; if (!S.searchOpen) S.q = ""; S.view = "home"; render(); if (S.searchOpen) $("q").focus(); }
@@ -309,6 +335,9 @@
     if (pc) return customerPush();
     const ed = e.target.closest("[data-ed],[data-editmode]");
     if (ed) { e.stopPropagation(); return onEdit(ed); }
+    const star = e.target.closest("[data-star]");
+    if (star) { const n = +star.dataset.star; S.rate = n; document.querySelectorAll("#rStars [data-star]").forEach((x) => (x.textContent = +x.dataset.star <= n ? "⭐" : "☆")); const b = $("rSend"); if (b) b.disabled = false; return; }
+    if (e.target.id === "rSend") { const b = e.target, id = b.dataset.oid; b.disabled = true; try { await Store.rateOrder(id, S.rate, ($("rNote") || {}).value || ""); toast(L("شكراً على تقييمك 💙", "Thanks for your rating 💙")); openTrack(id); } catch (err) { toast(err.message, "err"); b.disabled = false; } return; }
     if (e.target.id === "cpBtn") return applyCoupon();
     if (e.target.id === "cpDel") { S.coupon = null; return render(); }
     const sl = e.target.closest("[data-slot],[data-sday]");
@@ -317,7 +346,7 @@
     const d = el.dataset;
     if (d.inc) { setQty(d.inc, (S.cart[d.inc] || 0) + 1); refreshSheetQty(d.inc); }
     else if (d.dec) { let k = d.dec; if (!S.cart[k]) k = Object.keys(S.cart).filter((x) => x.startsWith(k + "|")).pop() || k; setQty(k, (S.cart[k] || 0) - 1); refreshSheetQty(d.dec); }
-    else if (d.view !== undefined) { closeSheet(); S.view = d.view; render(); scrollTo(0, 0); }
+    else if (d.view !== undefined) { closeSheet(); S.view = d.view; render(); scrollTo(0, 0); if ((d.view === "checkout" || d.view === "account") && S.addr.phone) { S.ptsFor = S.addr.phone; loadPts(S.addr.phone, true); } }
     else if (d.cat !== undefined) { S.cat = d.cat || null; render(); }
     else if (d.open) openProduct(d.open);
     else if (d.lang !== undefined) setLang(S.lang === "ar" ? "en" : "ar");
@@ -374,7 +403,7 @@
 
   (async function start() {
     document.documentElement.dir = S.lang === "ar" ? "rtl" : "ltr"; document.documentElement.lang = S.lang;
-    try { await Store.init(); await checkEditRights(); await load(); render(); } catch (e) { $("app").innerHTML = `<div class="empty"><div class="e">⚠️</div>${esc(e.message)}</div>`; return; }
+    try { await Store.init(); await checkEditRights(); await load(); render(); const qo = new URLSearchParams(location.search).get("order"); if (qo && /^[0-9a-f-]{36}$/i.test(qo)) { S.view = "orders"; render(); openTrack(qo); history.replaceState(null, "", location.pathname); } } catch (e) { $("app").innerHTML = `<div class="empty"><div class="e">⚠️</div>${esc(e.message)}</div>`; return; }
     Store.onChange(async () => { if (S.view === "checkout" || document.getElementById("sheet")) return; try { await load(); render(); } catch (e) {} });
     if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
   })();
