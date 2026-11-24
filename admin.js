@@ -75,6 +75,7 @@
       ${Number(o.discount) ? `<div class="line" style="color:#16a34a;font-size:14px"><span>🎟️ خصم ${esc(o.coupon_code || "")}</span><span>−${money(o.discount)}</span></div>` : ""}
       ${Number(o.points_disc) ? `<div class="line" style="color:#16a34a;font-size:14px"><span>⭐ خصم نقاط (${o.points_used} نقطة)</span><span>−${money(o.points_disc)}</span></div>` : ""}
       <div class="line total" style="font-size:15px"><span>الإجمالي (شامل التوصيل ${money(o.delivery_fee)})</span><span>${money(o.total)}</span></div>
+      ${o.proof_url ? `<details style="margin-top:6px"><summary class="mut">📸 صورة التسليم</summary><img src="${esc(o.proof_url)}" alt="" style="width:100%;max-height:300px;object-fit:cover;border-radius:12px;margin-top:6px"></details>` : ""}
       ${o.rating ? `<div class="notice" style="background:#fffbeb;border-color:#fde68a">${"⭐".repeat(o.rating)}${"☆".repeat(5 - o.rating)} تقييم الزبون${o.rating_note ? ` – «${esc(o.rating_note)}»` : ""}</div>` : ""}
       <div class="row2" style="margin-top:6px"><select class="in" data-ostatus="${o.id}">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${o.status === k ? "selected" : ""}>${v.ar}</option>`).join("")}</select>
         <select class="in" data-opay="${o.id}">${Object.entries(PAY).map(([k, v]) => `<option value="${k}" ${(o.payment || "cash") === k ? "selected" : ""}>${v}</option>`).join("")}</select>

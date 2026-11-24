@@ -18,7 +18,36 @@
       $("upBtn").onclick = async () => { const ph = $("np").value.replace(/\D/g, ""); if (!$("nn").value.trim() || ph.length !== 8) return toast("اكتب الاسم ورقم من 8 أرقام", "err"); try { await Store.signUp($("em").value.trim(), $("pw").value, $("nn").value.trim(), "965" + ph); toast("تم التسجيل – انتظر موافقة الإدارة"); } catch (e) { toast(e.message, "err"); } };
     }
   }
+  // ---------- صورة التسليم ----------
+  function proofSheet(id) {
+    const o = D.orders.find((x) => x.id === id); if (!o) return;
+    UI.sheet(`<h3>📸 صورة التسليم – طلب #${o.order_no}</h3><p class="mut">صوّر الطلب مع الزبون أو قدام الباب، علشان يبقى فيه إثبات إنه اتسلّم.</p>
+      <label class="btn tq block" style="text-align:center">📷 صوّر الطلب<input type="file" id="pf" accept="image/*" capture="environment" hidden></label>
+      <img id="pv" alt="" style="display:none;width:100%;max-height:260px;object-fit:cover;border-radius:12px;margin-top:10px">
+      <button class="btn green block" id="pOk" disabled style="margin-top:10px">✅ تأكيد التسليم</button>`, () => {
+      let file = null;
+      $("pf").onchange = (ev) => { file = ev.target.files[0]; if (!file) return; $("pv").src = URL.createObjectURL(file); $("pv").style.display = "block"; $("pOk").disabled = false; };
+      $("pOk").onclick = async () => {
+        if (!file) return; $("pOk").disabled = true; $("pOk").textContent = "⏳ بيرفع الصورة…";
+        try { const url = await Store.uploadProof(file); await Store.driverSetStatus(id, "delivered", url); UI.closeSheet(); toast("تم التوصيل ✓"); await refresh(); }
+        catch (err) { toast(err.message, "err"); $("pOk").disabled = false; $("pOk").textContent = "✅ تأكيد التسليم"; }
+      };
+    });
+  }
+  // ---------- التنبيه العالي ----------
+  let AC = null, alarmT = null, wake = null;
+  const unlockAudio = () => { try { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === "suspended") AC.resume(); } catch (e) {} };
+  function beep() { try { unlockAudio(); [0, 250, 500].forEach((t) => { const o = AC.createOscillator(), g = AC.createGain(); o.connect(g); g.connect(AC.destination); o.type = "square"; o.frequency.value = 1175; g.gain.value = 0.6; o.start(AC.currentTime + t / 1000); o.stop(AC.currentTime + t / 1000 + 0.18); }); } catch (e) {} }
+  function alarm(on) {
+    if (on && !alarmT) { const ring = () => { beep(); try { navigator.vibrate && navigator.vibrate([400, 150, 400, 150, 400]); } catch (e) {} }; ring(); alarmT = setInterval(ring, 2500); const b = $("ackBar"); if (b) b.style.display = "block"; }
+    if (!on && alarmT) { clearInterval(alarmT); alarmT = null; const b = $("ackBar"); if (b) b.style.display = "none"; }
+  }
+  async function keepAwake() { try { if (!wake && navigator.wakeLock && document.visibilityState === "visible") { wake = await navigator.wakeLock.request("screen"); wake.addEventListener("release", () => (wake = null)); } } catch (e) {} }
+  document.addEventListener("visibilitychange", () => { if (D.me) keepAwake(); });
+  document.addEventListener("touchend", unlockAudio, { passive: true });
   document.addEventListener("click", async (e) => {
+    unlockAudio(); if (alarmT && e.target.closest("#ackBtn,[data-tab],.ord")) { alarm(false); }
+    if (e.target.closest("[data-proof]")) return proofSheet(e.target.closest("[data-proof]").dataset.proof);
     const el = e.target.closest("[data-demo],[data-go],[data-tab]"); if (!el) return;
     if (el.dataset.demo) { const p = (await Store.profiles()).find((x) => x.id === el.dataset.demo); Store.demoLogin({ id: p.id, role: "driver", full_name: p.full_name, phone: p.phone }); boot(); }
     else if (el.dataset.tab) { D.tab = el.dataset.tab; render(); }
@@ -30,18 +59,29 @@
     }
   });
 
+  const addrQ = (o) => encodeURIComponent(`الكويت ${o.area} قطعة ${o.block || ""} شارع ${o.street || ""} ${o.avenue ? "جادة " + o.avenue : ""} منزل ${o.house || ""}`);
+  const navLink = (o) => "https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=" + addrQ(o);
+  const trackLink = (o) => location.origin + location.pathname.replace(/driver\.html$/, "") + "?order=" + o.id;
+  const onWay = (o) => {
+    const due = o.payment === "credit" ? "" : o.payment === "knet_on_delivery" ? `\n💳 المبلغ ${money(o.total)} – الدفع كي نت عند الاستلام` : `\n💵 المبلغ المطلوب كاش: ${money(o.total)}`;
+    const t = `السلام عليكم ${o.customer_name || ""} 👋\nمعاك ${(D.me && D.me.full_name) || "المندوب"} من Goten 🐟\nأنا في الطريق ليك بطلبك #${o.order_no} 🛵${due}\n📍 تتبع طلبك: ${trackLink(o)}`;
+    return "https://wa.me/" + o.phone + "?text=" + encodeURIComponent(t);
+  };
   const mapLink = (o) => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(`الكويت ${o.area} قطعة ${o.block || ""} شارع ${o.street || ""} ${o.avenue ? "جادة " + o.avenue : ""} منزل ${o.house || ""}`);
   function card(o) {
     const s = STATUS[o.status];
     const act = ["new", "confirmed", "preparing"].includes(o.status) ? `<button class="btn tq block" data-go="${o.id}:out_for_delivery">🚚 استلمت الطلب – في الطريق</button>`
-      : o.status === "out_for_delivery" ? `<button class="btn green block" data-go="${o.id}:delivered">✅ تم التوصيل</button>` : "";
+      : o.status === "out_for_delivery" ? `<button class="btn green block" data-proof="${o.id}">✅ تم التوصيل + صورة</button>` : "";
+    const going = o.status === "out_for_delivery", live = !["delivered", "cancelled"].includes(o.status);
     return `<div class="ord" style="border-color:${s.c}"><div class="hd"><b>#${o.order_no}</b><span class="st" style="background:${s.c}">${s.ar}</span></div>
       <div style="margin-top:6px"><b>${esc(o.customer_name)}</b> · <span class="mut">${esc(o.slot || "")}</span></div>
       <div>📍 ${esc(o.area)} – قطعة ${esc(o.block)} – شارع ${esc(o.street)}${o.avenue ? " – جادة " + esc(o.avenue) : ""} – منزل ${esc(o.house)}${o.floor_apt ? " – " + esc(o.floor_apt) : ""}</div>
       ${o.notes ? `<div class="notice">📝 ${esc(o.notes)}</div>` : ""}
       <div class="mut" style="margin-top:6px">${(o.items || []).map((i) => `${esc(i.name_ar)} ×${i.qty}${(i.opts || []).length ? ` (${i.opts.map((x) => esc(x.c)).join("، ")})` : ""}`).join("، ")}${o.slot ? `<div>⏰ ${esc(o.slot)}</div>` : ""}${Number(o.discount) ? `<div>🎟️ خصم ${money(o.discount)}</div>` : ""}</div>
       <div class="line total" style="font-size:16px"><span>${o.payment === "credit" ? "📝 آجل – مفيش تحصيل" : o.payment === "knet_on_delivery" ? "💳 كي نت عند الاستلام" : "💵 المطلوب تحصيله كاش"}</span><span>${money(o.total)}</span></div>
-      <div class="acts"><a class="btn sm ghost" href="tel:+${esc(o.phone)}">📞 اتصال</a><a class="btn sm ghost" target="_blank" rel="noopener" href="https://wa.me/${esc(o.phone)}">💬 واتساب</a><a class="btn sm ghost" target="_blank" rel="noopener" href="${mapLink(o)}">🗺️ الخريطة</a></div>
+      <div class="acts"><a class="btn sm ghost" href="tel:+${esc(o.phone)}">📞 اتصال</a>${live ? `<a class="btn sm ${going ? "tq" : "ghost"}" target="_blank" rel="noopener" href="${onWay(o)}">🛵 أنا في الطريق</a>` : `<a class="btn sm ghost" target="_blank" rel="noopener" href="https://wa.me/${esc(o.phone)}">💬 واتساب</a>`}<a class="btn sm ghost" target="_blank" rel="noopener" href="${mapLink(o)}">🗺️ الخريطة</a></div>
+      ${live ? `<a class="btn block" style="margin-top:8px;text-align:center;text-decoration:none;background:#1a73e8;color:#fff" target="_blank" rel="noopener" href="${navLink(o)}">🧭 ابدأ التوجيه لعنوان الزبون</a>` : ""}
+      ${o.proof_url && o.status === "delivered" ? `<img src="${esc(o.proof_url)}" alt="" style="width:100%;max-height:150px;object-fit:cover;border-radius:12px;margin-top:8px">` : ""}
       ${act ? `<div style="margin-top:10px">${act}</div>` : ""}</div>`;
   }
   // ---------- المحفظة ----------
@@ -78,6 +118,7 @@
     const list = D.tab === "active" ? active : done;
     $("app").innerHTML = `<header class="top"><div class="wrap"><div class="row"><div class="brand">${LOGO}<div>مناديب Goten<small>${esc(D.me.full_name || "")}</small></div></div><div class="sp"></div><button class="chip-btn" id="pushBtn">${UI.pushState() === "granted" ? "🔔" : "🔕 فعّل"}</button><button class="chip-btn" id="outBtn">خروج</button></div>
       <div class="tabs"><button class="${D.tab === "active" ? "on" : ""}" data-tab="active">الطلبات الحالية (${active.length})</button><button class="${D.tab === "done" ? "on" : ""}" data-tab="done">اليوم (${done.length})</button><button class="${D.tab === "wallet" ? "on" : ""}" data-tab="wallet">💰 محفظتي</button></div></div></header>
+      <div id="ackBar" style="display:${alarmT ? "block" : "none"};position:sticky;top:0;z-index:5;background:#f59e0b;padding:10px"><div class="wrap"><button class="btn block" id="ackBtn" style="background:#fff;color:#b45309;font-size:17px">🔔 طلب جديد! دوس هنا علشان توقف الصوت</button></div></div>
       <main><div class="wrap">${D.tab === "wallet" ? walletView() : `<div class="stats" style="margin-top:12px"><div class="stat"><span class="mut">تم توصيلها اليوم</span><b>${done.length}</b></div><div class="stat"><span class="mut">كاش محصّل اليوم</span><b>${money(cash)}</b></div></div>
       ${list.map(card).join("") || `<div class="empty"><div class="e">${D.tab === "active" ? "😌" : "📦"}</div>${D.tab === "active" ? "ما في طلبات معيّنة لك حالياً" : "لسه ما وصلت طلبات اليوم"}</div>`}`}</div></main>`;
     $("outBtn").onclick = async () => { await Store.signOut(); D.me = null; loginView(); };
@@ -86,14 +127,15 @@
   async function refresh() {
     [D.orders, D.moves] = await Promise.all([Store.driverOrders(), Store.driverMoves().catch(() => [])]);
     const ids = new Set(D.orders.map((o) => o.id));
-    if (D.known && D.orders.some((o) => !D.known.has(o.id))) { toast("🔔 طلب جديد معيّن لك"); try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) {} }
-    D.known = ids; render();
+    const isNew = D.known && D.orders.some((o) => !D.known.has(o.id) && !["delivered", "cancelled"].includes(o.status));
+    D.known = ids; if (!document.getElementById("sheet")) render();
+    if (isNew) { toast("🔔 طلب جديد معيّن لك"); D.tab = "active"; if (!document.getElementById("sheet")) render(); alarm(true); }
   }
   async function boot() {
     const me = await Store.me();
     if (!me) return loginView();
     if (me.role !== "driver") return loginView(me.role === "pending" ? "حسابك قيد المراجعة – الإدارة لازم توافق عليه أولاً." : "هذا الحساب ليس حساب مندوب.");
-    D.me = me; await refresh();
+    D.me = me; keepAwake(); await refresh();
   }
   (async () => { try { await Store.init(); await boot(); Store._onRecovery = () => UI.recover(() => boot()); if (Store.recovery) Store._onRecovery(); } catch (e) { toast(e.message, "err"); } Store.onChange(() => { if (D.me) refresh().catch(() => {}); }); })();
 })();

@@ -151,6 +151,14 @@
     async deleteBanner(id) { if (LIVE) return chk(await sb.from("banners").delete().eq("id", id)); const d = db(); d.banners = d.banners.filter((x) => x.id !== id); persist(); },
 
     // رفع صورة من الجهاز → رابط
+    async uploadProof(file) {
+      const c = await compress(file, 1000, 0.75);
+      if (!LIVE) return c.toDataURL("image/jpeg", 0.6);
+      const blob = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.75));
+      const path = "proofs/" + uid() + ".jpg";
+      chk(await sb.storage.from("images").upload(path, blob, { contentType: "image/jpeg", upsert: false }));
+      return sb.storage.from("images").getPublicUrl(path).data.publicUrl;
+    },
     async uploadImage(file) {
       if (!LIVE) { const c = await compress(file, 700, 0.72); return c.toDataURL("image/jpeg", 0.72); }
       const c = await compress(file, 1200, 0.82);
@@ -227,8 +235,9 @@
       const d = db(); d.driverMoves = d.driverMoves || []; d.driverMoves.unshift({ ...m, id: uid(), created_at: nowISO() }); persist();
     },
     async deleteDriverMove(id) { if (LIVE) return chk(await sb.from("driver_moves").delete().eq("id", id)); const d = db(); d.driverMoves = (d.driverMoves || []).filter((x) => x.id !== id); persist(); },
-    async driverSetStatus(id, st) {
-      if (LIVE) return chk(await sb.rpc("driver_set_status", { oid: id, st }));
+    async driverSetStatus(id, st, proof) {
+      if (LIVE) return chk(await sb.rpc("driver_set_status", { oid: id, st, proof: proof || null }));
+      if (proof) { const o = db().orders.find((x) => x.id === id); if (o) { o.proof_url = proof; persist(); } }
       if (!["out_for_delivery", "delivered"].includes(st)) throw new Error("BAD_STATUS");
       return this.updateOrder(id, { status: st });
     },
