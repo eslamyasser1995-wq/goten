@@ -73,8 +73,9 @@
       <div style="margin-top:6px">${(o.items || []).map((i) => `<div>• ${esc(i.name_ar)} ×${i.qty}${(i.opts || []).length ? ` <span class="mut" style="font-size:12px">(${i.opts.map((x) => esc(x.c)).join("، ")})</span>` : ""}</div>`).join("")}</div>
       ${o.notes ? `<div class="notice">📝 ${esc(o.notes)}</div>` : ""}
       ${Number(o.discount) ? `<div class="line" style="color:#16a34a;font-size:14px"><span>🎟️ خصم ${esc(o.coupon_code || "")}</span><span>−${money(o.discount)}</span></div>` : ""}
+      ${(o.fees || []).map((f) => `<div class="line" style="font-size:14px"><span>${esc(f.name_ar)} (${Number(f.qty)} × ${money(f.price)})</span><span>${money(f.amount)}</span></div>`).join("")}
       ${Number(o.points_disc) ? `<div class="line" style="color:#16a34a;font-size:14px"><span>⭐ خصم نقاط (${o.points_used} نقطة)</span><span>−${money(o.points_disc)}</span></div>` : ""}
-      <div class="line total" style="font-size:15px"><span>الإجمالي (شامل التوصيل ${money(o.delivery_fee)})</span><span>${money(o.total)}</span></div>
+      <div class="line total" style="font-size:15px"><span>الإجمالي (شامل التوصيل ${money(o.delivery_fee)}${Number(o.fees_total) ? " والرسوم " + money(o.fees_total) : ""})</span><span>${money(o.total)}</span></div>
       ${o.proof_url ? `<details style="margin-top:6px"><summary class="mut">📸 صورة التسليم</summary><img src="${esc(o.proof_url)}" alt="" style="width:100%;max-height:300px;object-fit:cover;border-radius:12px;margin-top:6px"></details>` : ""}
       ${o.rating ? `<div class="notice" style="background:#fffbeb;border-color:#fde68a">${"⭐".repeat(o.rating)}${"☆".repeat(5 - o.rating)} تقييم الزبون${o.rating_note ? ` – «${esc(o.rating_note)}»` : ""}</div>` : ""}
       <div class="row2" style="margin-top:6px"><select class="in" data-ostatus="${o.id}">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${o.status === k ? "selected" : ""}>${v.ar}</option>`).join("")}</select>
@@ -104,7 +105,7 @@
     return `<div class="h2">المنتجات (${A.products.length}) <span style="display:flex;gap:6px"><button class="btn ghost sm" data-bulk>💲 الأسعار</button><button class="btn tq sm" data-newprod>+ منتج</button></span></div>
       <input class="in" id="pq" placeholder="ابحث في المنتجات..." value="${esc(A.pq)}">
       <div class="list">${list.map((p) => `<div class="it"><img src="${esc(p.image || "")}" alt=""><div class="t"><b>${esc(p.name_ar)}</b><span class="mut">${esc(catName(p.category_id))}</span>
-        <div><span class="price">${money(p.price)}</span>${p.old_price ? `<span class="old">${money(p.old_price)}</span>` : ""}${!p.active ? '<span class="pill r">مخفي</span>' : ""}${p.featured ? '<span class="pill g">عرض</span>' : ""}</div></div>
+        <div><span class="price">${money(p.price)}</span>${p.old_price ? `<span class="old">${money(p.old_price)}</span>` : ""}${!p.active ? '<span class="pill r">مخفي</span>' : ""}${p.featured ? '<span class="pill g">عرض</span>' : ""}${p.sale_type === "wholesale" ? '<span class="pill">📦 جملة</span>' : ""}</div></div>
         <label class="mut" style="display:flex;flex-direction:column;align-items:center;font-size:11px"><input type="checkbox" data-stock="${p.id}" ${p.in_stock ? "checked" : ""} style="width:22px;height:22px;accent-color:var(--tq)">متوفر</label>
         <button class="btn sm ghost" data-editprod="${p.id}">✏️</button></div>`).join("")}</div>`;
   }
@@ -695,6 +696,53 @@
   }
 
   // ---------- الإعدادات ----------
+  const FEE_B = { kg: "لكل كيلو", piece: "لكل حبة/علبة", qty: "لكل وحدة في السلة", order: "مرة واحدة على الطلب" };
+  function feesSheet() {
+    let F = JSON.parse(JSON.stringify(A.settings.fees || []));
+    const row = (f, i) => `<div class="card" style="background:#f8fafc">
+      <div class="row2"><label class="f"><span>الاسم</span><input class="in" data-fk="${i}:name_ar" value="${esc(f.name_ar || "")}"></label><label class="f"><span>السعر (د.ك)</span><input class="in" type="number" step="0.005" min="0" inputmode="decimal" data-fk="${i}:price" value="${f.price || ""}"></label></div>
+      <div class="row2"><label class="f"><span>بيتحسب</span><select class="in" data-fk="${i}:basis">${Object.entries(FEE_B).map(([k, l]) => `<option value="${k}" ${f.basis === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+      <label class="f"><span>للزبون</span><select class="in" data-fk="${i}:mode"><option value="always" ${f.mode !== "optional" ? "selected" : ""}>إجباري على كل طلب</option><option value="optional" ${f.mode === "optional" ? "selected" : ""}>اختياري (الزبون يختار)</option></select></label></div>
+      <label class="switch"><span>مفعّل</span><input type="checkbox" data-fk="${i}:on" ${f.on !== false ? "checked" : ""}></label>
+      <label class="switch"><span>يتحسب كمان على منتجات الجملة</span><input type="checkbox" data-fk="${i}:w" ${f.w ? "checked" : ""}></label>
+      <button class="btn sm red" data-fdel="${i}">🗑️ مسح</button></div>`;
+    const draw = () => { $("fList").innerHTML = F.map(row).join("") || '<p class="mut">مفيش رسوم.</p>'; };
+    sheet(`<h3>🧾 رسوم الطلب</h3><p class="mut">السعر بيتضرب في الكمية حسب اختيارك: «لكل كيلو» بيعدّ الكيلوهات في السلة، و«لكل حبة/علبة» بيعدّ المنتجات اللي مش بالكيلو. الرسوم بتظهر للزبون سطر سطر، وتحتها الإجمالي شامل كل حاجة.</p>
+      <div id="fList"></div><button class="btn ghost block" id="fAdd">➕ رسم جديد</button><button class="btn tq block" id="fSave" style="margin-top:8px">💾 حفظ الرسوم</button>`, () => {
+      draw();
+      const body = document.getElementById("sheet");
+      body.addEventListener("input", (e) => { const k = e.target.dataset.fk; if (!k) return; const [i, f] = k.split(":"); F[i][f] = e.target.type === "checkbox" ? e.target.checked : f === "price" ? num(e.target.value) : e.target.value; });
+      body.addEventListener("change", (e) => { const k = e.target.dataset.fk; if (!k) return; const [i, f] = k.split(":"); F[i][f] = e.target.type === "checkbox" ? e.target.checked : f === "price" ? num(e.target.value) : e.target.value; });
+      body.addEventListener("click", (e) => { const d = e.target.closest("[data-fdel]"); if (d) { F.splice(+d.dataset.fdel, 1); draw(); } });
+      $("fAdd").onclick = () => { F.push({ id: "f" + Date.now().toString(36), name_ar: "", name_en: "", price: 0, basis: "kg", mode: "always", on: true, w: false }); draw(); };
+      $("fSave").onclick = async () => {
+        F = F.filter((f) => (f.name_ar || "").trim()).map((f) => ({ ...f, name_ar: f.name_ar.trim(), price: Math.max(0, num(f.price)) }));
+        try { await Store.saveSettings({ fees: F }); closeSheet(); toast("تم الحفظ ✓"); await refresh(); } catch (err) { toast(err.message, "err"); }
+      };
+    });
+  }
+  function plistSheet() {
+    let L = JSON.parse(JSON.stringify(A.settings.price_list || [])); const st = { image: A.settings.price_list_image || "" };
+    const row = (r, i) => `<div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:6px;margin-bottom:6px"><input class="in" placeholder="الصنف" data-lk="${i}:name" value="${esc(r.name || "")}"><input class="in" placeholder="السعر" type="number" step="0.005" inputmode="decimal" data-lk="${i}:price" value="${r.price == null ? "" : r.price}"><input class="in" placeholder="الوحدة" data-lk="${i}:unit" value="${esc(r.unit || "")}"><button class="btn sm ghost" data-ldel="${i}">✕</button></div>`;
+    const draw = () => { $("lList").innerHTML = L.map(row).join("") || '<p class="mut">القايمة فاضية.</p>'; };
+    sheet(`<h3>📋 قائمة الأسعار</h3><div class="mut" style="margin-bottom:6px">🖼️ صورة القايمة (اختياري):</div>${Editors.imgPicker(st.image)}
+      <label class="f"><span>ملاحظة تحت القايمة (اختياري)</span><input class="in" id="lNote" value="${esc(A.settings.price_list_note || "")}" placeholder="مثال: الأسعار بتتغير يومياً حسب السوق"></label>
+      <div class="h2" style="margin-top:10px">الأصناف</div><div id="lList"></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn ghost sm" id="lAdd">➕ صنف</button><button class="btn ghost sm" id="lFill">📥 انسخ أسعار المنتجات الحالية</button><button class="btn ghost sm" id="lClr">مسح الكل</button></div>
+      <button class="btn tq block" id="lSave" style="margin-top:10px">💾 حفظ قائمة الأسعار</button>`, () => {
+      Editors.wireImgPicker(st); draw();
+      const body = document.getElementById("sheet");
+      body.addEventListener("input", (e) => { const k = e.target.dataset.lk; if (!k) return; const [i, f] = k.split(":"); L[i][f] = f === "price" ? (e.target.value === "" ? null : num(e.target.value)) : e.target.value; });
+      body.addEventListener("click", (e) => { const d = e.target.closest("[data-ldel]"); if (d) { L.splice(+d.dataset.ldel, 1); draw(); } });
+      $("lAdd").onclick = () => { L.push({ name: "", price: null, unit: "كيلو" }); draw(); };
+      $("lFill").onclick = () => { const have = new Set(L.map((r) => r.name)); A.products.filter((p) => p.active).forEach((p) => { if (!have.has(p.name_ar)) L.push({ name: p.name_ar, price: num(p.price), unit: (p.sale_type === "wholesale" ? "جملة – " : "") + (p.unit_ar || "") }); }); draw(); };
+      $("lClr").onclick = () => { L = []; draw(); };
+      $("lSave").onclick = async () => {
+        L = L.filter((r) => (r.name || "").trim()).map((r) => ({ name: r.name.trim(), price: r.price == null ? null : num(r.price), unit: (r.unit || "").trim() }));
+        try { await Store.saveSettings({ price_list: L, price_list_image: st.image || null, price_list_note: $("lNote").value.trim() || null }); closeSheet(); toast("تم الحفظ ✓"); await refresh(); } catch (err) { toast(err.message, "err"); }
+      };
+    });
+  }
   function settings() {
     const s = A.settings, fi = (k, l, type = "text", extra = "") => `<label class="f"><span>${l}</span><input class="in" id="s_${k}" type="${type}" value="${esc(s[k] == null ? "" : s[k])}" ${extra}></label>`;
     return `<div class="card"><label class="switch"><span><b>المتجر مفتوح ويستقبل طلبات</b></span><input type="checkbox" id="s_store_open" ${s.store_open ? "checked" : ""}></label>
@@ -704,6 +752,8 @@
       <label class="switch"><span>يظهر للزبون «بأسرع وقت»</span><input type="checkbox" id="s_allow_asap" ${s.allow_asap !== false ? "checked" : ""}></label>
       <label class="f"><span>الفترات (كل فترة في سطر)</span><textarea class="in" id="s_slots" rows="5" dir="ltr" style="text-align:right">${esc((Array.isArray(s.slots) ? s.slots : ["10:00 – 12:00", "12:00 – 14:00", "16:00 – 18:00", "18:00 – 20:00", "20:00 – 22:00"]).join("\n"))}</textarea></label>
       <div class="row2">${fi("slot_days", "يقدر يحجز لكام يوم قدّام", "number", 'min="1" max="7" inputmode="numeric"').replace('value=""', 'value="2"')}${fi("slot_cutoff", "تقفل الفترة قبل بدايتها بكام دقيقة", "number", 'min="0" inputmode="numeric"').replace('value=""', 'value="60"')}</div>
+      <div class="h2" style="margin-top:14px">🛵 المندوب اللي بيستلم الطلبات تلقائي</div>
+      <label class="f"><span>أول ما الزبون يطلب، الطلب يروح على طول للمندوب ده من غير ما تعيّنه</span><select class="in" id="s_auto_driver"><option value="">❌ لأ – أنا اللي بعيّن المندوب</option>${A.profiles.filter((p) => p.role === "driver").map((p) => `<option value="${p.id}" ${s.auto_driver === p.id ? "selected" : ""}>🛵 ${esc(p.full_name || p.phone || "مندوب")}</option>`).join("")}</select></label>
       <div class="h2" style="margin-top:14px">🛵 أجرة المندوب</div>
       ${fi("driver_pay", "المندوب ياخد كام على كل توصيلة (د.ك)", "number", 'step="0.005" min="0" inputmode="decimal"').replace('value=""', 'value="0.5"')}
       <div class="h2" style="margin-top:14px">⭐ نقاط الولاء</div>
@@ -711,6 +761,8 @@
       <div class="row3">${fi("points_per_kd", "نقاط لكل 1 د.ك", "number", 'step="0.5" min="0" inputmode="decimal"').replace('value=""', 'value="1"')}${fi("point_value", "قيمة النقطة (د.ك)", "number", 'step="0.001" min="0" inputmode="decimal"').replace('value=""', 'value="0.010"')}${fi("points_min", "أقل نقاط للاستخدام", "number", 'min="0" inputmode="numeric"').replace('value=""', 'value="100"')}</div>
       <p class="mut" style="margin-top:0">الزبون بياخد النقاط لما الطلب يتسلّم (على قيمة المنتجات من غير التوصيل). مثال: 1 نقطة لكل دينار، والنقطة بـ 0.010 → كل 100 نقطة = 1 د.ك خصم.</p>
       <button class="btn tq block" id="sSave">💾 حفظ الإعدادات</button></div>
+      <div class="card"><b>🧾 رسوم التجهيز والتنظيف والفلين</b><p class="mut">${(A.settings.fees || []).filter((f) => f.on !== false && Number(f.price) > 0).map((f) => `${esc(f.name_ar)}: ${money(f.price)} ${FEE_B[f.basis] || ""}${f.mode === "optional" ? " (اختياري للزبون)" : ""}`).join(" · ") || "لسه مفيش رسوم مفعّلة."}</p><button class="btn sm" data-fees>✏️ تعديل الرسوم</button></div>
+      <div class="card"><b>📋 قائمة الأسعار</b><p class="mut">${(A.settings.price_list || []).length} صنف${A.settings.price_list_image ? " + صورة" : ""} – بتظهر للزبون في التطبيق.</p><button class="btn sm" data-plist>✏️ تعديل قائمة الأسعار</button></div>
       <div class="card"><b>شكل التطبيق</b><p class="mut">الشعار، اسم المتجر، لون الشريط العلوي.</p><button class="btn sm" data-editheader>🎨 تعديل الشريط العلوي والشعار</button></div>
       ${Store.live ? "" : '<div class="card"><b>الوضع التجريبي</b><p class="mut">البيانات محفوظة على هذا الجهاز فقط. لربط العملاء والمناديب فعلياً فعّل Supabase (راجع الدليل).</p><button class="btn red sm" id="resetBtn">إرجاع البيانات التجريبية الأصلية</button></div>'}`;
   }
@@ -725,12 +777,12 @@
     const pq = $("pq"); if (pq) pq.oninput = (e) => { A.pq = e.target.value; const pos = e.target.selectionStart; render(); $("pq").focus(); $("pq").setSelectionRange(pos, pos); };
     const ss = $("sSave"); if (ss) ss.onclick = async () => {
       const v = (k) => $("s_" + k).value.trim();
-      try { await Store.saveSettings({ store_open: $("s_store_open").checked, delivery_fee: num(v("delivery_fee")), min_order: num(v("min_order")), free_delivery_over: v("free_delivery_over") ? num(v("free_delivery_over")) : null, whatsapp: v("whatsapp").replace(/\D/g, ""), notice_ar: v("notice_ar"), notice_en: v("notice_en"), ...(v("delivery_eta") || A.settings.delivery_eta ? { delivery_eta: v("delivery_eta") || null } : {}), ...("slots" in A.settings || !Store.live ? { slots: $("s_slots").value.split(/\n+/).map((x) => x.trim()).filter(Boolean), slot_days: Math.max(1, Math.min(7, parseInt(v("slot_days")) || 2)), slot_cutoff: Math.max(0, parseInt(v("slot_cutoff")) || 0), allow_asap: $("s_allow_asap").checked } : {}), ...("points_on" in A.settings || !Store.live ? { points_on: $("s_points_on").checked, points_per_kd: Math.max(0, num(v("points_per_kd"))), point_value: Math.max(0, num(v("point_value"))), points_min: Math.max(0, parseInt(v("points_min")) || 0) } : {}), ...("driver_pay" in A.settings || !Store.live ? { driver_pay: Math.max(0, num(v("driver_pay"))) } : {}) }); toast("تم الحفظ ✓"); await refresh(); } catch (e) { toast(e.message, "err"); }
+      try { await Store.saveSettings({ store_open: $("s_store_open").checked, delivery_fee: num(v("delivery_fee")), min_order: num(v("min_order")), free_delivery_over: v("free_delivery_over") ? num(v("free_delivery_over")) : null, whatsapp: v("whatsapp").replace(/\D/g, ""), notice_ar: v("notice_ar"), notice_en: v("notice_en"), ...(v("delivery_eta") || A.settings.delivery_eta ? { delivery_eta: v("delivery_eta") || null } : {}), ...("slots" in A.settings || !Store.live ? { slots: $("s_slots").value.split(/\n+/).map((x) => x.trim()).filter(Boolean), slot_days: Math.max(1, Math.min(7, parseInt(v("slot_days")) || 2)), slot_cutoff: Math.max(0, parseInt(v("slot_cutoff")) || 0), allow_asap: $("s_allow_asap").checked } : {}), ...("points_on" in A.settings || !Store.live ? { points_on: $("s_points_on").checked, points_per_kd: Math.max(0, num(v("points_per_kd"))), point_value: Math.max(0, num(v("point_value"))), points_min: Math.max(0, parseInt(v("points_min")) || 0) } : {}), ...("auto_driver" in A.settings || !Store.live ? { auto_driver: $("s_auto_driver").value || null } : {}), ...("driver_pay" in A.settings || !Store.live ? { driver_pay: Math.max(0, num(v("driver_pay"))) } : {}) }); toast("تم الحفظ ✓"); await refresh(); } catch (e) { toast(e.message, "err"); }
     };
     const rb = $("resetBtn"); if (rb) rb.onclick = async () => { if (await UI.ask("مسح كل التعديلات والطلبات التجريبية؟")) { await Store.resetDemo(); await refresh(); toast("تم"); } };
   }
   document.addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx],[data-sf],[data-smv],[data-shist],[data-asub],[data-buy],[data-stockpick],[data-newsup],[data-supedit],[data-suppay],[data-supstmt],[data-supbuy],[data-newcust],[data-cpay],[data-csell],[data-cstmt],[data-cedit],[data-cpnew],[data-cpedit],[data-cptog],[data-cpshare],[data-dmove],[data-dmlog],[data-dmdel]"); if (!el || !A.me) return;
+    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx],[data-sf],[data-smv],[data-shist],[data-asub],[data-buy],[data-stockpick],[data-newsup],[data-supedit],[data-suppay],[data-supstmt],[data-supbuy],[data-newcust],[data-cpay],[data-csell],[data-cstmt],[data-cedit],[data-cpnew],[data-cpedit],[data-cptog],[data-cpshare],[data-dmove],[data-dmlog],[data-fees],[data-plist],[data-dmdel]"); if (!el || !A.me) return;
     const d = el.dataset;
     try {
       if (d.tab) { A.tab = d.tab; render(); scrollTo(0, 0); }
@@ -769,6 +821,8 @@
         A.bulk = false; toast(`تم تحديث ${n} سعر ✓`); await refresh();
       }
       else if (d.quick) { const [id, st] = d.quick.split(":"); await Store.updateOrder(id, { status: st }); toast("تم ✓"); await refresh(); }
+      else if (d.fees !== undefined) feesSheet();
+      else if (d.plist !== undefined) plistSheet();
       else if (d.dmove) { const [id, k] = d.dmove.split(":"); dMoveSheet(id, k); }
       else if (d.dmlog) dMoveLog(d.dmlog);
       else if (d.dmdel) { if (!(await UI.ask("مسح الحركة دي؟"))) return; try { await Store.deleteDriverMove(d.dmdel); closeSheet(); await refresh(); toast("اتمسحت"); } catch (err) { toast(err.message, "err"); } }

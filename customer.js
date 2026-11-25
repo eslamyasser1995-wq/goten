@@ -6,7 +6,7 @@
     en: { tag: "Fresh fish & seafood", search: "Search fish, shrimp...", cats: "Categories", all: "All", offers: "Special offers", products: "Products", add: "Add", out: "Out of stock", home: "Home", cart: "Cart", orders: "Orders", viewCart: "View cart", emptyCart: "Your cart is empty", startShop: "Start shopping", subtotal: "Subtotal", delivery: "Delivery", free: "Free", total: "Total", checkout: "Checkout", minOrder: "Minimum order", freeOver: "Free delivery over", name: "Name", phone: "Phone", area: "Area", chooseArea: "Choose area", block: "Block", street: "Street", avenue: "Avenue", house: "House / Building", floor: "Floor / Apt", notes: "Notes (cleaning, cutting...)", slot: "Delivery time", asap: "As soon as possible", pay: "Payment", cash: "Cash on delivery", knet: "KNET on delivery (driver's machine)", place: "Place order", placed: "Order received!", orderNo: "Order no.", track: "Track order", noOrders: "No orders yet", closed: "Store is closed now", driver: "Driver", call: "Call", items: "Items", back: "Back", required: "Please fill the required fields", phoneBad: "Phone must be 8 digits", lang: "عربي", addr: "Delivery address", whats: "WhatsApp", qty: "Qty", today: "Today", tomorrow: "Tomorrow", noRes: "No results", optin: "Send me offers & discounts on WhatsApp", cats2: "Categories", status: "Order status", account: "Account", review: "Review order", addCart: "Add to cart", busy: "Store is busy now", deliverTo: "Deliver to:", pickArea: "Choose your area", eta: "Same-day delivery", other: "More products", seeAll: "All", myAddr: "My address", noAddr: "No address yet – it will be saved with your first order", contact: "Contact us", installApp: "Add the app to your Home Screen", installHint: "In Safari: Share ⬆️ → Add to Home Screen", notif: "Offer notifications", langLbl: "Language", editAddr: "Edit address", save: "Save", coupon: "Promo code", apply: "Apply", remove: "Remove", discount: "Discount", couponOk: "Code applied ✓", choose: "Choose", inCart: "in cart", day: "Day", pickTime: "Pick a time", noSlots: "No slots available", afterTomorrow: "Day after", errs: { COUPON_INVALID: "Invalid code", COUPON_EXPIRED: "Code expired", COUPON_LIMIT: "Code fully used", COUPON_USED: "You already used this code", COUPON_MIN: "Code needs a higher minimum order", STORE_CLOSED: "Store is closed now", PRODUCT_UNAVAILABLE: "An item in your cart is no longer available", OUT_OF_STOCK: "Requested quantity is more than available", MIN_ORDER: "Order is below the minimum", EMPTY: "Cart is empty" } }
   };
   const L = (ar, en) => (S.lang === "en" ? en : ar);
-  const S = { pts: null, usePts: false, lang: ls.get("ik_lang", "ar"), cart: ls.get("ik_cart", {}), my: ls.get("ik_orders", []), addr: ls.get("ik_addr", {}), view: "home", searchOpen: false, edit: false, all: { p: [], c: [], b: [] }, cat: null, q: "", products: [], cats: [], banners: [], settings: {} };
+  const S = { secMode: {}, feeSel: [], pts: null, usePts: false, lang: ls.get("ik_lang", "ar"), cart: ls.get("ik_cart", {}), my: ls.get("ik_orders", []), addr: ls.get("ik_addr", {}), view: "home", searchOpen: false, edit: false, all: { p: [], c: [], b: [] }, cat: null, q: "", products: [], cats: [], banners: [], settings: {} };
   const t = (k) => T[S.lang][k];
   const nm = (o, f = "name") => (S.lang === "en" && o[f + "_en"]) || o[f + "_ar"] || "";
   const $ = (id) => document.getElementById(id);
@@ -33,6 +33,16 @@
   const qOf = (id) => Object.entries(S.cart).reduce((a, [k, q]) => a + (k === id || k.startsWith(id + "|") ? q : 0), 0);
   const optsTxt = (opts) => opts.filter((o) => o.c).map((o) => `${o.g}: ${o.c}`).join(" · ");
   const cartCount = () => cartLines().reduce((a, l) => a + l.q, 0);
+  const isKg = (p) => /كيلو|كغ|كجم/.test(p.unit_ar || "") || /(^|[^a-z])(kg|kilo)/i.test(p.unit_en || "");
+  function feeLines(all) {
+    const c = { kr: 0, pr: 0, kw: 0, pw: 0 };
+    cartLines().forEach((l) => { const w = l.p.sale_type === "wholesale", k = isKg(l.p); c[(k ? "k" : "p") + (w ? "w" : "r")] += l.q; });
+    return (S.settings.fees || []).filter((f) => f.on !== false && Number(f.price) > 0 && (all || f.mode !== "optional" || S.feeSel.includes(f.id))).map((f) => {
+      const w = !!f.w, q = f.basis === "kg" ? c.kr + (w ? c.kw : 0) : f.basis === "piece" ? c.pr + (w ? c.pw : 0) : f.basis === "order" ? (c.kr + c.pr > 0 || w ? 1 : 0) : c.kr + c.pr + (w ? c.kw + c.pw : 0);
+      return { f, q, amount: Math.round(Number(f.price) * q * 1000) / 1000 };
+    }).filter((x) => x.q > 0);
+  }
+  const FEE_U = { kg: ["كيلو", "kg"], piece: ["حبة", "pc"], qty: ["وحدة", "unit"], order: ["طلب", "order"] };
   function totals() {
     const sub = cartLines().reduce((a, l) => a + l.unit * l.q, 0), s = S.settings;
     let fee = s.free_delivery_over && sub >= s.free_delivery_over ? 0 : Number(s.delivery_fee || 0);
@@ -40,7 +50,8 @@
     if (c) { if (c.kind === "free_delivery") fee = 0; else disc = Math.min(sub, Number(c.discount || 0)); }
     let pts = 0, pd = 0; const P = S.pts;
     if (S.usePts && P && P.on && P.points > 0 && P.points >= Number(P.min || 0) && Number(P.point_value) > 0) { pts = Math.min(P.points, Math.floor(Math.max(0, sub - disc) / Number(P.point_value))); pd = Math.round(pts * Number(P.point_value) * 1000) / 1000; }
-    return { sub, fee, disc, pts, pd, total: Math.max(0, sub - disc - pd + fee) };
+    const fl = feeLines(), ft = fl.reduce((a, f) => a + f.amount, 0);
+    return { sub, fee, disc, pts, pd, fl, ft, total: Math.max(0, sub - disc - pd + fee + ft) };
   }
   function setQty(key, q) {
     const id = key.split("|")[0], p = S.products.find((x) => x.id === id), max = p && p.stock != null ? Math.floor(Number(p.stock)) : 99;
@@ -84,14 +95,14 @@
     return `<div class="prow">
       <div class="pinfo"><div class="pname" data-open="${p.id}">${esc(nm(p))}${S.edit && !p.active ? ' <span class="pill r">مخفي</span>' : ""}</div>
         ${desc ? `<div class="pdesc" data-open="${p.id}">${esc(desc)}</div>` : ""}
-        <div class="pprice">${money(p.price, S.lang)}${off ? ` <s>${money(p.old_price, S.lang)}</s>` : ""}${nm(p, "unit") ? ` <small>/ ${esc(nm(p, "unit"))}</small>` : ""}</div>
+        <div class="pprice">${p.sale_type === "wholesale" ? `<span class="pill" style="background:#fef3c7;color:#92400e;font-size:11px;margin-inline-end:4px">📦 ${L("جملة", "Wholesale")}</span>` : ""}${money(p.price, S.lang)}${off ? ` <s>${money(p.old_price, S.lang)}</s>` : ""}${nm(p, "unit") ? ` <small>/ ${esc(nm(p, "unit"))}</small>` : ""}</div>
         <div class="pact">${qtyCtl(p)}</div></div>
       <div class="pimg" data-open="${p.id}"><img src="${esc(p.image)}" alt="" loading="lazy">${off ? `<span class="badge">-${off}%</span>` : ""}${busy ? `<div class="pbusy">${!p.in_stock ? t("out") : t("busy")}</div>` : ""}${S.edit ? `<button class="ebtn on-card" data-ed="prod:${p.id}">✏️ تعديل</button>` : ""}</div>
     </div>`;
   }
   function fcard(p) {
     return `<div class="fcard"><div class="fimg" data-open="${p.id}"><img src="${esc(p.image)}" alt="" loading="lazy">${p.old_price > p.price ? `<span class="badge">-${Math.round((1 - p.price / p.old_price) * 100)}%</span>` : ""}</div>
-      <div class="fb"><div class="pname" data-open="${p.id}">${esc(nm(p))}</div><div class="pprice">${money(p.price, S.lang)}</div>
+      <div class="fb"><div class="pname" data-open="${p.id}">${esc(nm(p))}</div><div class="pprice">${money(p.price, S.lang)}${p.old_price > p.price ? `<s style="display:block;font-size:11px;color:#94a3b8">${money(p.old_price, S.lang)}</s>` : ""}${nm(p, "unit") ? `<small class="mut" style="display:block;font-size:11px">${p.sale_type === "wholesale" ? "📦 " : ""}${esc(nm(p, "unit"))}</small>` : ""}</div>
       ${p.in_stock && S.settings.store_open ? (qOf(p.id) ? `<div class="qty sm"><button ${hasOpts(p) ? "data-open" : "data-inc"}="${p.id}">+</button><b>${qOf(p.id)}</b><button data-dec="${p.id}">−</button></div>` : `<button class="fplus" ${hasOpts(p) ? "data-open" : "data-inc"}="${p.id}" aria-label="add">+</button>`) : `<span class="mut">${t(!p.in_stock ? "out" : "busy")}</span>`}</div></div>`;
   }
   function sections() {
@@ -99,6 +110,27 @@
     const rest = S.products.filter((p) => !S.cats.find((c) => c.id === p.category_id));
     if (rest.length) groups.push({ c: { id: "_other", name_ar: T.ar.other, name_en: T.en.other }, items: rest });
     return groups.filter((g) => g.items.length || S.edit);
+  }
+  const hasPL = () => (S.settings.price_list || []).length || S.settings.price_list_image;
+  function secHtml(g) {
+    const ed = S.edit && g.c.id !== "_other" ? ` <button class="ebtn sm" data-ed="cat:${g.c.id}">✏️</button>` : "", add = S.edit ? '<button class="addtile row" data-ed="newprod">➕ إضافة منتج</button>' : "";
+    if (g.c.section === "offers") return `<section class="csec" id="sec_${g.c.id}" style="background:linear-gradient(135deg,#fff7ed,#fef3c7);margin:18px -12px 0;padding:4px 12px 14px;border-radius:18px"><h2>🔥 ${esc(nm(g.c))}${ed}</h2><p class="mut" style="margin:-4px 0 8px">${L("أسعار خاصة للكميات الكبيرة", "Special prices for bulk orders")}</p><div class="frow">${g.items.map(fcard).join("")}</div>${add}</section>`;
+    if (g.c.section === "special") {
+      const hasR = g.items.some((p) => p.sale_type !== "wholesale"), hasW = g.items.some((p) => p.sale_type === "wholesale");
+      const m = S.secMode[g.c.id] || (hasR ? "retail" : "wholesale"), list = hasR && hasW ? g.items.filter((p) => (p.sale_type === "wholesale" ? "wholesale" : "retail") === m) : g.items;
+      return `<section class="csec" id="sec_${g.c.id}" style="background:#effcfc;margin:18px -12px 0;padding:4px 12px 12px;border-radius:18px"><h2>⭐ ${esc(nm(g.c))}${ed}</h2>
+        ${hasR && hasW ? `<div class="chips" style="margin-bottom:8px"><button class="chip ${m === "retail" ? "on" : ""}" data-smode="${g.c.id}:retail">🛒 ${L("قطاعي", "Retail")}</button><button class="chip ${m === "wholesale" ? "on" : ""}" data-smode="${g.c.id}:wholesale">📦 ${L("جملة", "Wholesale")}</button></div>` : ""}
+        <div class="plist">${list.map(prow).join("")}${add}</div></section>`;
+    }
+    return `<section class="csec" id="sec_${g.c.id}"><h2>${esc(nm(g.c))}${ed}</h2><div class="plist">${g.items.map(prow).join("")}${add}</div></section>`;
+  }
+  function pricesView() {
+    const s = S.settings, L2 = s.price_list || [];
+    return `<div class="wrap"><div class="h2">📋 ${L("قائمة الأسعار", "Price list")}</div>
+      ${s.price_list_image ? `<img src="${esc(s.price_list_image)}" alt="" style="width:100%;border-radius:16px;margin-bottom:12px" data-zoom>` : ""}
+      ${L2.length ? `<div class="card">${L2.map((r) => `<div class="line"><span>${esc(r.name)}${r.unit ? ` <small class="mut">/ ${esc(r.unit)}</small>` : ""}</span><b>${r.price == null ? "—" : money(r.price, S.lang)}</b></div>`).join("")}</div>` : ""}
+      ${s.price_list_note ? `<p class="mut" style="text-align:center">${esc(s.price_list_note)}</p>` : ""}
+      <button class="btn tq block" data-view="home">🛒 ${L("اطلب الحين", "Order now")}</button></div>`;
   }
   function home() {
     const s = S.settings, q = S.q.trim().toLowerCase();
@@ -108,17 +140,17 @@
       return `<div class="wrap">${list.length ? `<div class="plist">${list.map(prow).join("")}</div>` : `<div class="empty"><div class="e">🔎</div>${t("noRes")}</div>`}</div>`;
     }
     const groups = sections(), feat = S.products.filter((p) => p.featured);
-    return `<div class="hero">${S.banners.map((b) => `<div class="hslide"><img src="${esc(b.image)}" alt="${esc(b.title || "")}">${S.edit ? `<button class="ebtn on-card" data-ed="ban:${b.id}">✏️ تعديل البنر</button>` : ""}</div>`).join("")}${S.edit ? '<button class="hslide addtile" data-ed="newban">➕ إضافة بنر</button>' : ""}${!S.banners.length && !S.edit ? `<div class="hslide hfallback">${LOGO}<b>${esc(s.store_name || "Goten")}</b></div>` : ""}</div>
+    return `<div class="hero">${S.banners.map((b) => `<div class="hslide">${b.video ? `<video src="${esc(b.video)}" ${b.image ? `poster="${esc(b.image)}"` : ""} autoplay muted loop playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover"></video>` : `<img src="${esc(b.image)}" alt="${esc(b.title || "")}">`}${S.edit ? `<button class="ebtn on-card" data-ed="ban:${b.id}">✏️ تعديل البنر</button>` : ""}</div>`).join("")}${S.edit ? '<button class="hslide addtile" data-ed="newban">➕ إضافة بنر</button>' : ""}${!S.banners.length && !S.edit ? `<div class="hslide hfallback">${LOGO}<b>${esc(s.store_name || "Goten")}</b></div>` : ""}</div>
       ${S.banners.length > 1 ? `<div class="dots">${S.banners.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</div>` : ""}
       <div class="wrap"><div class="info-row">
         <button class="info-pill" data-area><span><small>${t("deliverTo")}</small><b>${esc(S.addr.area || t("pickArea"))}</b></span><span class="chev">‹</span></button>
         <div class="info-pill soft"><b>⏱️ ${esc(s.delivery_eta || t("eta"))}</b></div></div>
+        ${hasPL() ? `<button class="btn block" data-view="prices" style="margin-top:8px;background:#fff;color:var(--txt);border:1.5px solid var(--line)">📋 ${L("قائمة الأسعار اليوم", "Today's price list")}</button>` : ""}
         ${!s.store_open ? `<div class="notice">⛔ ${t("closed")}</div>` : ""}${notice ? `<div class="notice">📢 ${esc(notice)}</div>` : ""}</div>
-      <div class="ctabs" id="ctabs"><div class="ctabs-in">${feat.length ? `<button data-jump="_feat">🔥 ${t("offers")}</button>` : ""}${groups.map((g) => `<button data-jump="${g.c.id}">${esc(nm(g.c))}</button>`).join("")}</div></div>
+      <div class="ctabs" id="ctabs"><div class="ctabs-in">${feat.length ? `<button data-jump="_feat">🔥 ${t("offers")}</button>` : ""}${groups.map((g) => `<button data-jump="${g.c.id}">${g.c.section === "special" ? "⭐ " : g.c.section === "offers" ? "🔥 " : ""}${esc(nm(g.c))}</button>`).join("")}</div></div>
       <div class="wrap">
         ${feat.length ? `<section class="csec" id="sec__feat"><h2>🔥 ${t("offers")}</h2><div class="frow">${feat.map(fcard).join("")}</div></section>` : ""}
-        ${groups.map((g) => `<section class="csec" id="sec_${g.c.id}"><h2>${esc(nm(g.c))}${S.edit && g.c.id !== "_other" ? ` <button class="ebtn sm" data-ed="cat:${g.c.id}">✏️</button>` : ""}</h2>
-          <div class="plist">${g.items.map(prow).join("")}${S.edit ? '<button class="addtile row" data-ed="newprod">➕ إضافة منتج</button>' : ""}</div></section>`).join("")}
+        ${groups.map(secHtml).join("")}
         ${!groups.length ? `<div class="empty"><div class="e">🐟</div>${S.lang === "en" ? "Products coming soon" : "المنتجات هتنزل قريب"}</div>` : ""}
         <p class="mut" style="text-align:center;margin:24px 0">${s.free_delivery_over ? `🚚 ${t("freeOver")} ${money(s.free_delivery_over, S.lang)} · ` : ""}${t("minOrder")} ${money(s.min_order, S.lang)}</p>
       </div>`;
@@ -134,6 +166,7 @@
       ${S.pts && S.pts.on ? `<div class="card" style="background:#fffbeb;border:1px solid #fde68a"><b>⭐ ${L("نقاطك", "Your points")}: ${S.pts.points}</b><p class="mut" style="margin:6px 0 0">${L(`= ${money(S.pts.value, S.lang)} خصم. كل 1 د.ك تشتري بيه = ${S.pts.per_kd} نقطة، وتقدر تستخدمها من ${S.pts.min} نقطة وانت بتطلب.`, `= ${money(S.pts.value, S.lang)} off. Earn ${S.pts.per_kd} pts per 1 KD; redeem from ${S.pts.min} pts at checkout.`)}</p></div>` : ""}
       <div class="card menu">
         <button data-view="orders"><span>🧾 ${t("orders")}</span><span class="chev">‹</span></button>
+        ${hasPL() ? `<button data-view="prices"><span>📋 ${L("قائمة الأسعار", "Price list")}</span><span class="chev">‹</span></button>` : ""}
         ${Store.live ? `<button data-pushc><span>${UI.pushState() === "granted" ? "🔔" : "🔕"} ${t("notif")}</span><span class="chev">‹</span></button>` : ""}
         <button data-lang><span>🌐 ${t("langLbl")}: ${S.lang === "ar" ? "العربية" : "English"}</span><span class="chev">‹</span></button>
         ${s.whatsapp ? `<a target="_blank" rel="noopener" href="https://wa.me/${esc(s.whatsapp)}"><span>💬 ${t("contact")}</span><span class="chev">‹</span></a>` : ""}
@@ -148,7 +181,7 @@
   }
   function summary() {
     const x = totals();
-    return `<div class="line"><span>${t("subtotal")}</span><b>${money(x.sub, S.lang)}</b></div><div class="line"><span>${t("delivery")}</span><b>${x.fee ? money(x.fee, S.lang) : t("free")}</b></div>${x.disc ? `<div class="line" style="color:#16a34a"><span>🎟️ ${t("discount")} (${esc(S.coupon.code)})</span><b>−${money(x.disc, S.lang)}</b></div>` : ""}${x.pd ? `<div class="line" style="color:#16a34a"><span>⭐ ${L("خصم النقاط", "Points discount")} (${x.pts})</span><b>−${money(x.pd, S.lang)}</b></div>` : ""}<div class="line total"><span>${t("total")}</span><span>${money(x.total, S.lang)}</span></div>`;
+    return `<div class="line"><span>${t("subtotal")}</span><b>${money(x.sub, S.lang)}</b></div><div class="line"><span>${t("delivery")}</span><b>${x.fee ? money(x.fee, S.lang) : t("free")}</b></div>${x.disc ? `<div class="line" style="color:#16a34a"><span>🎟️ ${t("discount")} (${esc(S.coupon.code)})</span><b>−${money(x.disc, S.lang)}</b></div>` : ""}${x.pd ? `<div class="line" style="color:#16a34a"><span>⭐ ${L("خصم النقاط", "Points discount")} (${x.pts})</span><b>−${money(x.pd, S.lang)}</b></div>` : ""}${x.fl.map((l) => `<div class="line"><span>${esc(S.lang === "en" && l.f.name_en ? l.f.name_en : l.f.name_ar)} <small class="mut">${l.f.basis === "order" ? "" : `(${l.q} ${(FEE_U[l.f.basis] || FEE_U.qty)[S.lang === "en" ? 1 : 0]} × ${money(l.f.price, S.lang)})`}</small></span><b>${money(l.amount, S.lang)}</b></div>`).join("")}<div class="line total"><span>${t("total")}<small style="display:block;font-size:12px;font-weight:600" class="mut">${L("شامل", "incl.")} ${[L("التوصيل", "delivery"), ...x.fl.map((l) => (S.lang === "en" && l.f.name_en ? l.f.name_en : l.f.name_ar))].join(L(" و", ", "))}</small></span><span>${money(x.total, S.lang)}</span></div>`;
   }
   function cart() {
     const lines = cartLines();
@@ -183,6 +216,10 @@
       ${days.length ? `<div class="chips">${days.map((d, i) => `<button type="button" class="chip${S.slotDay === i ? " on" : ""}" data-sday="${i}">${esc(d.label)}</button>`).join("")}</div>
       <div class="chips">${(days[S.slotDay] || days[0]).times.map((tm) => { const v = `${(days[S.slotDay] || days[0]).label} ${tm}`; return chip(v, "🕒 " + tm, cur === v); }).join("")}</div>` : `<p class="mut">${t("noSlots")}</p>`}`;
   }
+  function feesCard() {
+    const opt = feeLines(true).filter((l) => l.f.mode === "optional"); if (!opt.length) return "";
+    return `<div class="card"><b>🧾 ${L("خدمات إضافية", "Extra services")}</b>${opt.map((l) => `<label class="radio" style="margin-top:8px"><input type="checkbox" data-fee="${esc(l.f.id)}" ${S.feeSel.includes(l.f.id) ? "checked" : ""} style="width:20px;height:20px;accent-color:var(--tq)"> ${esc(S.lang === "en" && l.f.name_en ? l.f.name_en : l.f.name_ar)} <span class="mut">(+${money(l.amount, S.lang)})</span></label>`).join("")}</div>`;
+  }
   function ptsCard() {
     const P = S.pts; if (!P || !P.on) return "";
     const ok = P.points > 0 && P.points >= Number(P.min || 0);
@@ -207,7 +244,7 @@
         <label class="f"><span>${t("notes")}</span><textarea class="in" id="f_notes" rows="2"></textarea></label></div>
       <div class="card"><b>${t("slot")}</b><div id="slotBox">${slotPicker()}</div></div>
       <div class="card"><b>🎟️ ${t("coupon")}</b>${S.coupon ? `<div class="line" style="color:#16a34a"><span>✓ ${esc(S.coupon.code)}</span><button class="btn ghost sm" id="cpDel">${t("remove")}</button></div>` : `<div class="row2" style="margin-top:8px;grid-template-columns:1fr auto"><input class="in" id="f_coupon" placeholder="GOTEN10" autocapitalize="characters" style="text-transform:uppercase"><button class="btn sm" id="cpBtn">${t("apply")}</button></div>`}</div>
-      ${ptsCard()}
+      ${feesCard()}${ptsCard()}
       <div class="card"><b>${t("pay")}</b>
         <label class="radio"><input type="radio" name="pay" value="cash" checked> 💵 ${t("cash")}</label>
         <label class="radio"><input type="radio" name="pay" value="knet_on_delivery"> 💳 ${t("knet")}</label></div>
@@ -235,6 +272,7 @@
       <b>${t("items")}</b>${(o.items || []).map((i) => `<div class="line"><span>${esc(S.lang === "en" && i.name_en ? i.name_en : i.name_ar)} × ${i.qty}${(i.opts || []).length ? `<br><small class="mut">${esc(optsTxt(i.opts))}</small>` : ""}</span><span>${money(i.price * i.qty, S.lang)}</span></div>`).join("")}
       ${Number(o.discount) ? `<div class="line" style="color:#16a34a"><span>🎟️ ${t("discount")}${o.coupon_code ? " (" + esc(o.coupon_code) + ")" : ""}</span><span>−${money(o.discount, S.lang)}</span></div>` : ""}
       ${Number(o.points_disc) ? `<div class="line" style="color:#16a34a"><span>⭐ ${L("خصم النقاط", "Points discount")} (${o.points_used})</span><span>−${money(o.points_disc, S.lang)}</span></div>` : ""}
+      ${(o.fees || []).map((f) => `<div class="line"><span>${esc(S.lang === "en" && f.name_en ? f.name_en : f.name_ar)}</span><span>${money(f.amount, S.lang)}</span></div>`).join("")}
       <div class="line"><span>${t("delivery")}</span><span>${Number(o.delivery_fee) ? money(o.delivery_fee, S.lang) : t("free")}</span></div><div class="line total"><span>${t("total")}</span><span>${money(o.total, S.lang)}</span></div>
       ${o.proof_url && o.status === "delivered" ? `<b>📸 ${L("صورة التسليم", "Delivery photo")}</b><img src="${esc(o.proof_url)}" alt="" style="width:100%;max-height:240px;object-fit:cover;border-radius:12px;margin:6px 0">` : ""}
       ${o.status === "delivered" && Number(o.points_earned) ? `<div class="notice" style="background:#fffbeb;border-color:#fde68a">⭐ ${L(`كسبت ${o.points_earned} نقطة من الطلب ده`, `You earned ${o.points_earned} points`)}</div>` : ""}
@@ -269,7 +307,7 @@
 
   function render() {
     const app = $("app"), n = cartCount();
-    const body = S.view === "cart" ? cart() : S.view === "checkout" ? checkout() : S.view === "orders" ? ordersView() : S.view === "cats" ? catsView() : S.view === "account" ? accountView() : home();
+    const body = S.view === "cart" ? cart() : S.view === "checkout" ? checkout() : S.view === "orders" ? ordersView() : S.view === "cats" ? catsView() : S.view === "account" ? accountView() : S.view === "prices" ? pricesView() : home();
     const navOn = (v) => S.view === v || (v === "cart" && S.view === "checkout");
     app.innerHTML = header() + `<main class="shop">${body}</main>` +
       ((S.view === "home" || S.view === "cats") && n ? `<div class="cartbar"><div class="wrap"><button class="review-bar" data-view="cart"><span class="rcount">${n}</span><b>${t("review")}</b><span>${money(totals().sub, S.lang)}</span></button></div></div>` : "") +
@@ -277,6 +315,7 @@
     const q = $("q"); if (q) { q.oninput = (e) => { S.q = e.target.value; const pos = e.target.selectionStart; render(); const q2 = $("q"); q2.focus(); q2.setSelectionRange(pos, pos); }; }
     const pb = $("placeBtn"); if (pb) pb.onclick = place;
     const fp = $("f_phone"); if (fp) fp.oninput = () => { const v = fp.value.replace(/\D/g, ""); if (v.length === 8 && (!S.pts || S.ptsFor !== v)) { S.ptsFor = v; loadPts(v, true); } };
+    document.querySelectorAll("[data-fee]").forEach((cb) => (cb.onchange = () => { const id = cb.dataset.fee; S.feeSel = cb.checked ? [...new Set([...S.feeSel, id])] : S.feeSel.filter((x) => x !== id); keepForm(render); }));
     const up = $("usePts"); if (up) up.onchange = () => { S.usePts = up.checked; keepForm(render); };
     if (S.view === "orders") fillStatuses();
     // ارتفاع الهيدر علشان تبويبات الأقسام تثبت تحته
@@ -310,11 +349,12 @@
     p.items = cartLines().map((l) => ({ id: l.p.id, qty: l.q, opts: l.opts.map((o) => ({ g: o.g, c: o.c })) }));
     if (S.coupon) p.coupon = S.coupon.code;
     if (S.usePts) p.use_points = true;
+    if (S.feeSel.length) p.fees = S.feeSel;
     const btn = $("placeBtn"); btn.disabled = true;
     try {
       const r = await Store.placeOrder(p);
       S.my.unshift({ id: r.id, order_no: r.order_no, total: r.total, created_at: new Date().toISOString() }); ls.set("ik_orders", S.my.slice(0, 50));
-      S.cart = {}; S.coupon = null; S.slotSel = null; S.usePts = false; S.pts = null; saveCart();
+      S.cart = {}; S.coupon = null; S.slotSel = null; S.usePts = false; S.pts = null; S.feeSel = []; saveCart();
       if (Store.live && UI.pushState() === "granted") UI.enablePush((sub) => Store.saveCustomerPush(sub, p.phone)).catch(() => {}); S.view = "orders"; render();
       sheet(`<div class="empty" style="padding:20px 0"><div class="e">✅</div><h2>${t("placed")}</h2><p>${t("orderNo")}: <b>#${r.order_no}</b></p><p>${t("total")}: <b>${money(r.total, S.lang)}</b></p><button class="btn tq block" data-track2="${r.id}">${t("track")}</button>${Store.live && UI.pushState() !== "granted" ? `<button class="btn ghost block" style="margin-top:8px" data-pushc>🔔 ${S.lang === "en" ? "Get order updates & offers as notifications" : "فعّل الإشعارات عشان يوصلك حالة طلبك والعروض"}</button>` : ""}</div>`);
     } catch (e) {
@@ -336,6 +376,8 @@
     if (pc) return customerPush();
     const ed = e.target.closest("[data-ed],[data-editmode]");
     if (ed) { e.stopPropagation(); return onEdit(ed); }
+    const sm = e.target.closest("[data-smode]");
+    if (sm) { const [cid, m] = sm.dataset.smode.split(":"); S.secMode[cid] = m; render(); const sec = document.getElementById("sec_" + cid); if (sec) sec.scrollIntoView({ block: "start" }); return; }
     const star = e.target.closest("[data-star]");
     if (star) { const n = +star.dataset.star; S.rate = n; document.querySelectorAll("#rStars [data-star]").forEach((x) => (x.textContent = +x.dataset.star <= n ? "⭐" : "☆")); const b = $("rSend"); if (b) b.disabled = false; return; }
     if (e.target.id === "rSend") { const b = e.target, id = b.dataset.oid; b.disabled = true; try { await Store.rateOrder(id, S.rate, ($("rNote") || {}).value || ""); toast(L("شكراً على تقييمك 💙", "Thanks for your rating 💙")); openTrack(id); } catch (err) { toast(err.message, "err"); b.disabled = false; } return; }

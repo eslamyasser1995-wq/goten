@@ -70,14 +70,15 @@
   const mapLink = (o) => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(`الكويت ${o.area} قطعة ${o.block || ""} شارع ${o.street || ""} ${o.avenue ? "جادة " + o.avenue : ""} منزل ${o.house || ""}`);
   function card(o) {
     const s = STATUS[o.status];
-    const act = ["new", "confirmed", "preparing"].includes(o.status) ? `<button class="btn tq block" data-go="${o.id}:out_for_delivery">🚚 استلمت الطلب – في الطريق</button>`
+    const act = ["new", "confirmed"].includes(o.status) ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><button class="btn block" style="background:#f59e0b;color:#fff" data-go="${o.id}:preparing">🔪 بدأت التجهيز</button><button class="btn tq block" data-go="${o.id}:out_for_delivery">🚚 طلعت بالطلب</button></div>`
+      : o.status === "preparing" ? `<button class="btn tq block" data-go="${o.id}:out_for_delivery">🚚 الطلب جاهز – طلعت بيه</button>`
       : o.status === "out_for_delivery" ? `<button class="btn green block" data-proof="${o.id}">✅ تم التوصيل + صورة</button>` : "";
     const going = o.status === "out_for_delivery", live = !["delivered", "cancelled"].includes(o.status);
     return `<div class="ord" style="border-color:${s.c}"><div class="hd"><b>#${o.order_no}</b><span class="st" style="background:${s.c}">${s.ar}</span></div>
       <div style="margin-top:6px"><b>${esc(o.customer_name)}</b> · <span class="mut">${esc(o.slot || "")}</span></div>
       <div>📍 ${esc(o.area)} – قطعة ${esc(o.block)} – شارع ${esc(o.street)}${o.avenue ? " – جادة " + esc(o.avenue) : ""} – منزل ${esc(o.house)}${o.floor_apt ? " – " + esc(o.floor_apt) : ""}</div>
       ${o.notes ? `<div class="notice">📝 ${esc(o.notes)}</div>` : ""}
-      <div class="mut" style="margin-top:6px">${(o.items || []).map((i) => `${esc(i.name_ar)} ×${i.qty}${(i.opts || []).length ? ` (${i.opts.map((x) => esc(x.c)).join("، ")})` : ""}`).join("، ")}${o.slot ? `<div>⏰ ${esc(o.slot)}</div>` : ""}${Number(o.discount) ? `<div>🎟️ خصم ${money(o.discount)}</div>` : ""}</div>
+      <div class="mut" style="margin-top:6px">${(o.items || []).map((i) => `${esc(i.name_ar)} ×${i.qty}${(i.opts || []).length ? ` (${i.opts.map((x) => esc(x.c)).join("، ")})` : ""}`).join("، ")}${(o.fees || []).length ? `<div style="color:#b45309;font-weight:700">🧾 ${o.fees.map((f) => esc(f.name_ar)).join(" + ")}</div>` : ""}${o.slot ? `<div>⏰ ${esc(o.slot)}</div>` : ""}${Number(o.discount) ? `<div>🎟️ خصم ${money(o.discount)}</div>` : ""}</div>
       <div class="line total" style="font-size:16px"><span>${o.payment === "credit" ? "📝 آجل – مفيش تحصيل" : o.payment === "knet_on_delivery" ? "💳 كي نت عند الاستلام" : "💵 المطلوب تحصيله كاش"}</span><span>${money(o.total)}</span></div>
       <div class="acts"><a class="btn sm ghost" href="tel:+${esc(o.phone)}">📞 اتصال</a>${live ? `<a class="btn sm ${going ? "tq" : "ghost"}" target="_blank" rel="noopener" href="${onWay(o)}">🛵 أنا في الطريق</a>` : `<a class="btn sm ghost" target="_blank" rel="noopener" href="https://wa.me/${esc(o.phone)}">💬 واتساب</a>`}<a class="btn sm ghost" target="_blank" rel="noopener" href="${mapLink(o)}">🗺️ الخريطة</a></div>
       ${live ? `<a class="btn block" style="margin-top:8px;text-align:center;text-decoration:none;background:#1a73e8;color:#fff" target="_blank" rel="noopener" href="${navLink(o)}">🧭 ابدأ التوجيه لعنوان الزبون</a>` : ""}

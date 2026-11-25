@@ -91,7 +91,7 @@
   function demoPlace(p) {
     const d = db(), s = d.settings;
     if (!s.store_open) throw new Error("STORE_CLOSED");
-    const items = [], tot = {}; let sub = 0;
+    const items = [], tot = {}, cnt = { kr: 0, pr: 0, kw: 0, pw: 0 }; let sub = 0;
     for (const it of p.items || []) {
       const pr = d.products.find((x) => x.id === it.id && x.active && x.in_stock);
       if (!pr) throw new Error("PRODUCT_UNAVAILABLE");
@@ -100,7 +100,8 @@
       if (pr.stock != null && Number(pr.stock) < tot[pr.id]) throw new Error("OUT_OF_STOCK:" + pr.name_ar);
       const opts = (pr.options || []).filter((g) => (g.choices || []).length).map((g) => { const want = (it.opts || []).find((o) => o.g === g.name); const ch = (want && g.choices.find((c) => c.name === want.c)) || g.choices[0]; return { g: g.name, c: ch.name, price: Number(ch.price || 0) }; });
       const unit = Math.max(0, Number(pr.price) + opts.reduce((a, o) => a + o.price, 0));
-      items.push({ id: pr.id, name_ar: pr.name_ar, name_en: pr.name_en, price: unit, base_price: pr.price, opts, qty: q, unit_ar: pr.unit_ar, image: pr.image });
+      items.push({ id: pr.id, name_ar: pr.name_ar, name_en: pr.name_en, price: unit, base_price: pr.price, opts, qty: q, unit_ar: pr.unit_ar, image: pr.image, sale_type: pr.sale_type || "retail" });
+      { const k = /كيلو|كغ|كجم/.test(pr.unit_ar || "") || /(^|[^a-z])(kg|kilo)/i.test(pr.unit_en || ""), w = pr.sale_type === "wholesale"; cnt[(k ? "k" : "p") + (w ? "w" : "r")] += q; }
       sub += unit * q;
     }
     if (!items.length) throw new Error("EMPTY");
@@ -109,8 +110,10 @@
     if (p.coupon) { const r = demoCoupon(p.coupon, sub, p.phone); disc = r.discount; if (r.free_delivery) fee = 0; cc = r.code; const c = d.coupons.find((x) => x.code === cc); c.uses = (c.uses || 0) + 1; }
     let pts = 0, pdisc = 0;
     if (p.use_points && s.points_on !== false) { const bal = demoPts(p.phone), pv = Number(s.point_value || 0.01); if (bal >= Number(s.points_min || 0) && bal > 0) { pts = Math.min(bal, Math.floor(Math.max(0, sub - disc) / pv)); pdisc = Math.round(pts * pv * 1000) / 1000; } }
-    const { coupon, use_points, ...rest } = p;
-    const o = { ...rest, id: uid(), order_no: d.nextNo++, items, subtotal: sub, delivery_fee: fee, discount: disc, coupon_code: cc, points_used: pts, points_disc: pdisc, points_earned: 0, total: Math.max(0, sub - disc - pdisc + fee), status: "new", driver_id: null, created_at: nowISO(), updated_at: nowISO() };
+    const fl = (s.fees || []).filter((f) => f.on !== false && Number(f.price) > 0 && (f.mode !== "optional" || (p.fees || []).includes(f.id))).map((f) => { const w = !!f.w, q = f.basis === "kg" ? cnt.kr + (w ? cnt.kw : 0) : f.basis === "piece" ? cnt.pr + (w ? cnt.pw : 0) : f.basis === "order" ? (cnt.kr + cnt.pr > 0 || w ? 1 : 0) : cnt.kr + cnt.pr + (w ? cnt.kw + cnt.pw : 0); return { id: f.id, name_ar: f.name_ar, name_en: f.name_en, qty: q, basis: f.basis, price: Number(f.price), amount: Math.round(Number(f.price) * q * 1000) / 1000 }; }).filter((x) => x.qty > 0);
+    const ft = fl.reduce((a, f) => a + f.amount, 0);
+    const { coupon, use_points, fees: _f, ...rest } = p;
+    const o = { ...rest, id: uid(), order_no: d.nextNo++, items, subtotal: sub, delivery_fee: fee, discount: disc, coupon_code: cc, points_used: pts, points_disc: pdisc, points_earned: 0, fees: fl, fees_total: ft, driver_id: s.auto_driver || null, total: Math.max(0, sub - disc - pdisc + fee + ft), status: "new", created_at: nowISO(), updated_at: nowISO() };
     d.orders.unshift(o); demoOrderStock(o, -1, "sale", "طلب #"); persist();
     return { id: o.id, order_no: o.order_no, total: o.total };
   }
@@ -151,6 +154,14 @@
     async deleteBanner(id) { if (LIVE) return chk(await sb.from("banners").delete().eq("id", id)); const d = db(); d.banners = d.banners.filter((x) => x.id !== id); persist(); },
 
     // رفع صورة من الجهاز → رابط
+    async uploadVideo(file) {
+      if (file.size > 48 * 1024 * 1024) throw new Error("الفيديو أكبر من 48 ميجا – صغّره الأول (مثلاً من CapCut بجودة 720p)");
+      if (!LIVE) return URL.createObjectURL(file);
+      const ext = (file.name.split(".").pop() || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
+      const path = "v/" + uid() + "." + ext;
+      chk(await sb.storage.from("images").upload(path, file, { contentType: file.type || "video/mp4", upsert: false }));
+      return sb.storage.from("images").getPublicUrl(path).data.publicUrl;
+    },
     async uploadProof(file) {
       const c = await compress(file, 1000, 0.75);
       if (!LIVE) return c.toDataURL("image/jpeg", 0.6);
@@ -238,7 +249,7 @@
     async driverSetStatus(id, st, proof) {
       if (LIVE) return chk(await sb.rpc("driver_set_status", { oid: id, st, proof: proof || null }));
       if (proof) { const o = db().orders.find((x) => x.id === id); if (o) { o.proof_url = proof; persist(); } }
-      if (!["out_for_delivery", "delivered"].includes(st)) throw new Error("BAD_STATUS");
+      if (!["preparing", "out_for_delivery", "delivered"].includes(st)) throw new Error("BAD_STATUS");
       return this.updateOrder(id, { status: st });
     },
 
