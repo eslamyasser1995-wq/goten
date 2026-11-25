@@ -140,7 +140,7 @@
       return `<div class="wrap">${list.length ? `<div class="plist">${list.map(prow).join("")}</div>` : `<div class="empty"><div class="e">🔎</div>${t("noRes")}</div>`}</div>`;
     }
     const groups = sections(), feat = S.products.filter((p) => p.featured);
-    return `<div class="hero">${S.banners.map((b) => `<div class="hslide">${b.video ? `<video src="${esc(b.video)}" ${b.image ? `poster="${esc(b.image)}"` : ""} autoplay muted loop playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover"></video>` : `<img src="${esc(b.image)}" alt="${esc(b.title || "")}">`}${S.edit ? `<button class="ebtn on-card" data-ed="ban:${b.id}">✏️ تعديل البنر</button>` : ""}</div>`).join("")}${S.edit ? '<button class="hslide addtile" data-ed="newban">➕ إضافة بنر</button>' : ""}${!S.banners.length && !S.edit ? `<div class="hslide hfallback">${LOGO}<b>${esc(s.store_name || "Goten")}</b></div>` : ""}</div>
+    return `<div class="hero">${S.banners.map((b) => `<div class="hslide">${b.video ? `<video data-bid="${b.id}" src="${esc(b.video)}" ${b.image ? `poster="${esc(b.image)}"` : ""} autoplay muted loop playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover"></video><button class="vsnd" data-vsnd aria-label="sound" style="position:absolute;bottom:10px;inset-inline-start:10px;width:42px;height:42px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:20px;cursor:pointer;z-index:2">🔇</button>` : `<img src="${esc(b.image)}" alt="${esc(b.title || "")}">`}${S.edit ? `<button class="ebtn on-card" data-ed="ban:${b.id}">✏️ تعديل البنر</button>` : ""}</div>`).join("")}${S.edit ? '<button class="hslide addtile" data-ed="newban">➕ إضافة بنر</button>' : ""}${!S.banners.length && !S.edit ? `<div class="hslide hfallback">${LOGO}<b>${esc(s.store_name || "Goten")}</b></div>` : ""}</div>
       ${S.banners.length > 1 ? `<div class="dots">${S.banners.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</div>` : ""}
       <div class="wrap"><div class="info-row">
         <button class="info-pill" data-area><span><small>${t("deliverTo")}</small><b>${esc(S.addr.area || t("pickArea"))}</b></span><span class="chev">‹</span></button>
@@ -312,6 +312,7 @@
     app.innerHTML = header() + `<main class="shop">${body}</main>` +
       ((S.view === "home" || S.view === "cats") && n ? `<div class="cartbar"><div class="wrap"><button class="review-bar" data-view="cart"><span class="rcount">${n}</span><b>${t("review")}</b><span>${money(totals().sub, S.lang)}</span></button></div></div>` : "") +
       `<nav class="nav shop-nav"><div class="wrap">${[["home", IC.home, t("home")], ["cats", IC.cats, t("cats2")], ["orders", IC.status, t("status")], ["cart", IC.cart, t("cart")], ["account", IC.user, t("account")]].map(([v, i, l]) => `<button class="${navOn(v) ? "on" : ""}" data-view="${v}"><i>${i}</i>${l}${v === "cart" && n ? `<span class="cnt">${n}</span>` : ""}</button>`).join("")}</div></nav>`;
+    if (S.vOn) { const v = document.querySelector(`.hslide video[data-bid="${S.vOn}"]`); if (v) { v.muted = false; v.play().catch(() => { v.muted = true; S.vOn = null; }); const bt = v.parentElement.querySelector("[data-vsnd]"); if (bt) bt.textContent = "🔊"; } }
     const q = $("q"); if (q) { q.oninput = (e) => { S.q = e.target.value; const pos = e.target.selectionStart; render(); const q2 = $("q"); q2.focus(); q2.setSelectionRange(pos, pos); }; }
     const pb = $("placeBtn"); if (pb) pb.onclick = place;
     const fp = $("f_phone"); if (fp) fp.oninput = () => { const v = fp.value.replace(/\D/g, ""); if (v.length === 8 && (!S.pts || S.ptsFor !== v)) { S.ptsFor = v; loadPts(v, true); } };
@@ -376,6 +377,10 @@
     if (pc) return customerPush();
     const ed = e.target.closest("[data-ed],[data-editmode]");
     if (ed) { e.stopPropagation(); return onEdit(ed); }
+    const vs = e.target.closest("[data-vsnd]");
+    if (vs) { const v = vs.parentElement.querySelector("video"); if (!v) return; const on = v.muted;
+      document.querySelectorAll(".hslide video").forEach((x) => { if (x !== v) { x.muted = true; const bt = x.parentElement.querySelector("[data-vsnd]"); if (bt) bt.textContent = "🔇"; } });
+      v.muted = !on; S.vOn = on ? v.dataset.bid : null; if (on) { v.volume = 1; v.play().catch(() => {}); } vs.textContent = on ? "🔊" : "🔇"; return; }
     const sm = e.target.closest("[data-smode]");
     if (sm) { const [cid, m] = sm.dataset.smode.split(":"); S.secMode[cid] = m; render(); const sec = document.getElementById("sec_" + cid); if (sec) sec.scrollIntoView({ block: "start" }); return; }
     const star = e.target.closest("[data-star]");
