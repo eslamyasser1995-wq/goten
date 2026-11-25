@@ -331,6 +331,20 @@
       if (LIVE) return chk(await sb.from("transactions").delete().eq("id", id));
       const d = db(); { const o = (d.transactions || []).find((x) => x.id === id); if (o) audit("transactions", "delete", o, o.amount, null); } d.transactions = (d.transactions || []).filter((x) => x.id !== id); persist();
     },
+    // الموظفين والمصاريف الثابتة
+    async employees() { if (LIVE) { const r = await sb.from("employees").select("*").order("created_at"); if (r.error) { console.warn(r.error.message); return []; } return r.data; } return db().employees || []; },
+    async saveEmployee(e) { if (LIVE) { const r = { ...e }; if (!r.id) delete r.id; return chk(await sb.from("employees").upsert(r)); } const d = db(); d.employees = d.employees || []; return upsertArr(d.employees, e); },
+    async deleteEmployee(id) { if (LIVE) return chk(await sb.from("employees").delete().eq("id", id)); const d = db(); d.employees = (d.employees || []).filter((x) => x.id !== id); persist(); },
+    async recurring() { if (LIVE) { const r = await sb.from("recurring").select("*").order("day"); if (r.error) { console.warn(r.error.message); return []; } return r.data; } return db().recurring || []; },
+    async saveRecurring(e) { if (LIVE) { const r = { ...e }; if (!r.id) delete r.id; return chk(await sb.from("recurring").upsert(r)); } const d = db(); d.recurring = d.recurring || []; return upsertArr(d.recurring, e); },
+    async deleteRecurring(id) { if (LIVE) return chk(await sb.from("recurring").delete().eq("id", id)); const d = db(); d.recurring = (d.recurring || []).filter((x) => x.id !== id); persist(); },
+    async uploadDoc(file) {
+      const c = await compress(file, 1400, 0.8);
+      if (!LIVE) return c.toDataURL("image/jpeg", 0.6);
+      const blob = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.8)), path = "docs/" + uid() + ".jpg";
+      chk(await sb.storage.from("images").upload(path, blob, { contentType: "image/jpeg", upsert: false }));
+      return sb.storage.from("images").getPublicUrl(path).data.publicUrl;
+    },
     // الموردين
     async suppliers() {
       if (LIVE) { const r = await sb.from("suppliers").select("*").order("name"); if (r.error) { console.warn(r.error.message); return null; } return r.data; }
