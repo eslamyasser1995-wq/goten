@@ -87,6 +87,7 @@
     const disc = c.kind === "percent" ? Math.min(Math.round(sub * c.value * 10) / 1000, c.max_discount != null ? Number(c.max_discount) : sub) : c.kind === "fixed" ? Math.min(Number(c.value), sub) : 0;
     return { code: c.code, kind: c.kind, discount: disc, free_delivery: c.kind === "free_delivery" };
   }
+  function audit(tbl, action, r, ao, an) { const d = db(), me = sess.get(); d.audit = d.audit || []; d.audit.unshift({ id: uid(), at: nowISO(), actor_name: (me && me.full_name) || "", tbl, action, row_id: r.id, amount_old: ao, amount_new: an, info: { kind: r.kind, party: r.party_name, note: r.note, no: r.receipt_no } }); d.audit = d.audit.slice(0, 300); }
   function demoPts(ph) { return Math.max(0, db().orders.filter((o) => o.phone === ph).reduce((a, o) => a + (o.status === "delivered" ? Number(o.points_earned || 0) : 0) - (o.status !== "cancelled" ? Number(o.points_used || 0) : 0), 0)); }
   function demoPlace(p) {
     const d = db(), s = d.settings;
@@ -113,6 +114,7 @@
     const fl = (s.fees || []).filter((f) => f.on !== false && Number(f.price) > 0 && (f.mode !== "optional" || (p.fees || []).includes(f.id))).map((f) => { const w = !!f.w, q = f.basis === "kg" ? cnt.kr + (w ? cnt.kw : 0) : f.basis === "piece" ? cnt.pr + (w ? cnt.pw : 0) : f.basis === "order" ? (cnt.kr + cnt.pr > 0 || w ? 1 : 0) : cnt.kr + cnt.pr + (w ? cnt.kw + cnt.pw : 0); return { id: f.id, name_ar: f.name_ar, name_en: f.name_en, qty: q, basis: f.basis, price: Number(f.price), amount: Math.round(Number(f.price) * q * 1000) / 1000 }; }).filter((x) => x.qty > 0);
     const ft = fl.reduce((a, f) => a + f.amount, 0);
     const { coupon, use_points, fees: _f, ...rest } = p;
+    if (rest.payment === "wallet") rest.payment = "credit";
     const o = { ...rest, id: uid(), order_no: d.nextNo++, items, subtotal: sub, delivery_fee: fee, discount: disc, coupon_code: cc, points_used: pts, points_disc: pdisc, points_earned: 0, fees: fl, fees_total: ft, driver_id: s.auto_driver || null, total: Math.max(0, sub - disc - pdisc + fee + ft), status: "new", created_at: nowISO(), updated_at: nowISO() };
     d.orders.unshift(o); demoOrderStock(o, -1, "sale", "طلب #"); persist();
     return { id: o.id, order_no: o.order_no, total: o.total };
@@ -241,7 +243,7 @@
       const all = db().driverMoves || []; return driverId ? all.filter((m) => m.driver_id === driverId) : all;
     },
     async addDriverMove(m) {
-      m = { driver_id: m.driver_id, kind: m.kind, amount: Number(m.amount), note: m.note || null };
+      m = { driver_id: m.driver_id, kind: m.kind, amount: Number(m.amount), note: m.note || null, ...(m.category ? { category: m.category } : {}) };
       if (LIVE) return chk(await sb.from("driver_moves").insert(m));
       const d = db(); d.driverMoves = d.driverMoves || []; d.driverMoves.unshift({ ...m, id: uid(), created_at: nowISO() }); persist();
     },
@@ -304,12 +306,30 @@
       return db().transactions || [];
     },
     async saveTransaction(t) {
-      if (LIVE) return chk(await sb.from("transactions").insert(t));
-      const d = db(); d.transactions = d.transactions || []; d.transactions.unshift({ ...t, id: uid(), created_at: nowISO() }); persist();
+      if (LIVE) return chk(await sb.from("transactions").insert(t).select().single());
+      const d = db(); d.transactions = d.transactions || []; const r = { ...t, id: uid(), created_at: nowISO() };
+      if (t.kind === "receivable_paid") { d.receiptNo = (d.receiptNo || 1000) + 1; r.receipt_no = d.receiptNo; }
+      d.transactions.unshift(r); audit("transactions", "insert", r, null, r.amount); persist(); return r;
     },
+    // التحصيل
+    async custMeta() { if (LIVE) { const r = await sb.from("customer_meta").select("*"); if (r.error) { console.warn(r.error.message); return []; } return r.data; } return db().custMeta || []; },
+    async saveCustMeta(m) {
+      m = { ...m, updated_at: nowISO() };
+      if (LIVE) return chk(await sb.from("customer_meta").upsert(m, { onConflict: "phone" }));
+      const d = db(); d.custMeta = d.custMeta || []; const i = d.custMeta.findIndex((x) => x.phone === m.phone); if (i >= 0) d.custMeta[i] = { ...d.custMeta[i], ...m }; else d.custMeta.push(m); persist();
+    },
+    async dayCloses() { if (LIVE) { const r = await sb.from("day_closes").select("*").order("day", { ascending: false }).limit(120); if (r.error) { console.warn(r.error.message); return []; } return r.data; } return db().dayCloses || []; },
+    async saveDayClose(c) {
+      if (LIVE) return chk(await sb.from("day_closes").upsert(c, { onConflict: "day" }));
+      const d = db(); d.dayCloses = d.dayCloses || []; const i = d.dayCloses.findIndex((x) => x.day === c.day); const r = { ...c, created_at: nowISO() }; audit("day_closes", i >= 0 ? "update" : "insert", { id: c.day }, i >= 0 ? d.dayCloses[i].counted_cash : null, c.counted_cash);
+      if (i >= 0) d.dayCloses[i] = r; else d.dayCloses.unshift(r); persist();
+    },
+    async auditLog() { if (LIVE) { const r = await sb.from("audit_log").select("*").order("at", { ascending: false }).limit(300); if (r.error) return []; return r.data; } return db().audit || []; },
+    async myAccount(oid) { if (LIVE) return chk(await sb.rpc("my_account", { oid })); const o = db().orders.find((x) => x.id === oid); if (!o) return null; return { balance: 0, lines: [], phone_tail: o.phone.slice(-4) }; },
+    async walletBalance(oid) { if (LIVE) return Number(chk(await sb.rpc("wallet_balance", { oid })) || 0); return 0; },
     async deleteTransaction(id) {
       if (LIVE) return chk(await sb.from("transactions").delete().eq("id", id));
-      const d = db(); d.transactions = (d.transactions || []).filter((x) => x.id !== id); persist();
+      const d = db(); { const o = (d.transactions || []).find((x) => x.id === id); if (o) audit("transactions", "delete", o, o.amount, null); } d.transactions = (d.transactions || []).filter((x) => x.id !== id); persist();
     },
     // الموردين
     async suppliers() {

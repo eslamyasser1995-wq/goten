@@ -29,7 +29,7 @@
 
   async function loadAll() {
     const [o, p, c, b, pr, s, ic, tx, mv, sp, cp] = await Promise.all([Store.orders(), Store.products(), Store.categories(), Store.banners(), Store.profiles(), Store.settings(), Store.importedCustomers().catch(() => []), Store.transactions().catch(() => []), Store.stockMoves().catch(() => null), Store.suppliers().catch(() => null), Store.coupons().catch(() => null)]);
-    A.dmoves = await Store.driverMoves().catch(() => []);
+    [A.dmoves, A.cmeta, A.dcloses, A.alog] = await Promise.all([Store.driverMoves().catch(() => []), Store.custMeta().catch(() => []), Store.dayCloses().catch(() => []), A.me && A.me.role === "admin" ? Store.auditLog().catch(() => []) : Promise.resolve([])]);
     Object.assign(A, { orders: o, products: p, cats: c, banners: b, profiles: pr, settings: s || {}, imported: ic || [], tx: tx || [], moves: mv, sups: sp, cps: cp });
     const ids = new Set(o.map((x) => x.id));
     if (A.known) { const fresh = o.filter((x) => !A.known.has(x.id)); if (fresh.length) { beep(); toast(`🔔 طلب جديد #${fresh[0].order_no}`); } }
@@ -39,10 +39,11 @@
 
   // ---------- الواجهة ----------
   function render() {
+    if (A.me.role === "accountant" && !["orders", "accounts"].includes(A.tab)) A.tab = "accounts";
     const body = { dash, orders, accounts, products, cats, banners, coupons, customers, team, settings }[A.tab]();
     $("app").innerHTML = `<header class="top"><div class="wrap wide"><div class="row"><div class="brand">${LOGO}<div>لوحة التحكم<small>${esc(A.me.full_name || A.me.email || "")} ${Store.live ? "" : '· <span class="demo-tag">تجريبي</span>'}</small></div></div><div class="sp"></div>
       <button class="chip-btn" id="pushBtn">${UI.pushState() === "granted" ? "🔔" : "🔕 فعّل"}</button><a class="chip-btn" href="index.html" target="_blank" style="text-decoration:none">👁️</a><button class="chip-btn" id="outBtn">خروج</button></div>
-      <div class="tabs">${TABS.map(([k, l]) => `<button class="${A.tab === k ? "on" : ""}" data-tab="${k}">${l}${k === "orders" && newCount() ? ` (${newCount()})` : ""}</button>`).join("")}</div></div></header>
+      <div class="tabs">${TABS.filter(([k]) => A.me.role !== "accountant" || ["orders", "accounts"].includes(k)).map(([k, l]) => `<button class="${A.tab === k ? "on" : ""}" data-tab="${k}">${l}${k === "orders" && newCount() ? ` (${newCount()})` : ""}</button>`).join("")}</div></div></header>
       <main><div class="wrap wide">${body}</div></main>`;
     $("outBtn").onclick = async () => { await Store.signOut(); loginView(); };
     $("pushBtn").onclick = async () => { try { await UI.enablePush((s) => Store.savePush(s)); toast("✅ الإشعارات اتفعّلت – هيجيلك إشعار مع كل طلب جديد"); render(); } catch (e) { toast(e.message, "err"); } };
@@ -56,7 +57,8 @@
     const rev = today.reduce((a, o) => a + num(o.total), 0);
     const active = A.orders.filter((o) => !["delivered", "cancelled"].includes(o.status));
     const lowN = A.products.filter((p) => p.stock != null && num(p.stock) <= num(p.low_stock)).length;
-    return `${lowN ? `<div class="notice" data-asub="stock" style="cursor:pointer">📦 فيه ${lowN} منتج قرب يخلص أو خلص – اضغط للمخزون</div>` : ""}<div class="h2">نظرة عامة</div><div class="stats">
+    const lateC = custList().map(custCollect).filter((c) => c.late > 0 && !c.archived);
+    return `${lateC.length ? `<div class="notice" data-gocollect style="cursor:pointer;background:#fee2e2;border-color:#fecaca">⏰ فيه ${lateC.length} زبون متأخر في الدفع، عليهم ${money(lateC.reduce((a, c) => a + c.bal, 0))} – اضغط للتحصيل</div>` : ""}${lowN ? `<div class="notice" data-asub="stock" style="cursor:pointer">📦 فيه ${lowN} منتج قرب يخلص أو خلص – اضغط للمخزون</div>` : ""}<div class="h2">نظرة عامة</div><div class="stats">
       <div class="stat"><span class="mut">طلبات اليوم</span><b>${today.length}</b></div><div class="stat"><span class="mut">مبيعات اليوم</span><b>${money(rev)}</b></div>
       <div class="stat"><span class="mut">طلبات جديدة</span><b style="color:${STATUS.new.c}">${newCount()}</b></div><div class="stat"><span class="mut">طلبات جارية</span><b>${active.length}</b></div>${(() => { const r = A.orders.filter((o) => o.rating); return r.length ? `<div class="stat"><span class="mut">تقييم الزباين (${r.length})</span><b style="color:#d97706">⭐ ${(r.reduce((a, o) => a + o.rating, 0) / r.length).toFixed(1)}</b></div>` : ""; })()}</div>
       <div class="h2">إجراءات سريعة</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn tq" data-newprod>+ منتج جديد</button><button class="btn" data-tab="orders">إدارة الطلبات</button><button class="btn ghost" data-storeopen>${A.settings.store_open ? "⛔ إغلاق المتجر مؤقتاً" : "✅ فتح المتجر"}</button></div>
@@ -79,9 +81,10 @@
       ${o.proof_url ? `<details style="margin-top:6px"><summary class="mut">📸 صورة التسليم</summary><img src="${esc(o.proof_url)}" alt="" style="width:100%;max-height:300px;object-fit:cover;border-radius:12px;margin-top:6px"></details>` : ""}
       ${o.rating ? `<div class="notice" style="background:#fffbeb;border-color:#fde68a">${"⭐".repeat(o.rating)}${"☆".repeat(5 - o.rating)} تقييم الزبون${o.rating_note ? ` – «${esc(o.rating_note)}»` : ""}</div>` : ""}
       <div class="row2" style="margin-top:6px"><select class="in" data-ostatus="${o.id}">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${o.status === k ? "selected" : ""}>${v.ar}</option>`).join("")}</select>
+        ${(() => { const c = custC(normPh(o.phone)); return c.bal > 0.0005 ? `<div class="notice" style="grid-column:1/-1;margin:0;${c.over || c.late ? "background:#fee2e2;border-color:#fecaca" : ""}">${c.over ? "⛔ عدّى حد الآجل – " : c.late ? "⏰ متأخر في الدفع – " : "📝 "}عليه آجل ${money(c.bal)}${c.lim ? ` من حد ${money(c.lim)}` : ""}</div>` : c.bal < -0.0005 ? `<div class="notice" style="grid-column:1/-1;margin:0;background:#dcfce7;border-color:#bbf7d0">💳 ليه رصيد مقدّم ${money(-c.bal)}</div>` : ""; })()}
         <select class="in" data-opay="${o.id}">${Object.entries(PAY).map(([k, v]) => `<option value="${k}" ${(o.payment || "cash") === k ? "selected" : ""}>${v}</option>`).join("")}</select>
         <select class="in" data-odriver="${o.id}"><option value="">🛵 بدون مندوب</option>${drivers().map((d) => `<option value="${d.id}" ${o.driver_id === d.id ? "selected" : ""}>${esc(d.full_name)}</option>`).join("")}</select></div>
-      <div class="acts"><a class="btn sm ghost" href="tel:+${esc(o.phone)}">📞 اتصال</a><a class="btn sm ghost" target="_blank" rel="noopener" href="https://wa.me/${esc(o.phone)}">💬 واتساب</a><a class="btn sm ghost" target="_blank" rel="noopener" href="${mapLink(o)}">🗺️ الخريطة</a>
+      <div class="acts"><a class="btn sm ghost" href="tel:+${esc(o.phone)}">📞 اتصال</a><a class="btn sm ghost" target="_blank" rel="noopener" href="https://wa.me/${esc(o.phone)}">💬 واتساب</a><a class="btn sm ghost" target="_blank" rel="noopener" href="${mapLink(o)}">🗺️ الخريطة</a><button class="btn sm ghost" data-osplit="${o.id}">➗ ${o.pay_split ? "الدفع مقسوم" : "تقسيم الدفع"}</button>
         ${o.status === "new" ? `<button class="btn sm green" data-quick="${o.id}:confirmed">✓ تأكيد</button>` : ""}${o.driver_id ? `<span class="pill">المندوب: ${esc(pname(o.driver_id))}</span>` : ""}<button class="btn sm ghost" data-delorder="${o.id}" style="margin-inline-start:auto">🗑️ حذف</button></div></div>`;
   }
   function orders() {
@@ -186,14 +189,272 @@
   function receivables() {
     const m = new Map();
     const add = (phone, name, v) => { const r = m.get(phone) || { phone, name, bal: 0 }; r.bal += v; if (name) r.name = name; m.set(phone, r); };
-    A.orders.filter((o) => o.payment === "credit" && o.status !== "cancelled").forEach((o) => add(o.phone, o.customer_name, num(o.total)));
+    A.orders.filter((o) => o.payment === "credit" && o.status !== "cancelled").forEach((o) => add(o.phone, o.customer_name, o.pay_split ? num(o.pay_split.credit) : num(o.total)));
     A.tx.filter((t) => t.kind === "sale" && t.category === "credit" && t.party).forEach((t) => add(t.party, t.party_name, num(t.amount)));
     A.tx.filter((t) => t.kind === "receivable").forEach((t) => add(t.party, t.party_name, num(t.amount)));
     A.tx.filter((t) => t.kind === "receivable_paid").forEach((t) => add(t.party, t.party_name, -num(t.amount)));
     return [...m.values()].filter((r) => Math.abs(r.bal) > 0.0005).sort((a, b) => b.bal - a.bal);
   }
-  const subTabs = () => `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:10px 0 4px">${[["money", "💰 الحسابات"], ["stock", "📦 المخزون"], ["sups", "🚚 الموردين"], ["custs", "👥 العملاء"]].map(([k, l]) => `<button style="background:${(A.asub || "money") === k ? "var(--tq)" : "#e2e8f0"};color:${(A.asub || "money") === k ? "#fff" : "#334155"};font-size:13px;padding:9px 2px;border:0;border-radius:12px;font-weight:700;cursor:pointer;white-space:nowrap" data-asub="${k}">${l}</button>`).join("")}</div>`;
+  const subTabs = () => `<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;padding:10px 0 4px">${[["money", "💰 الحسابات"], ["collect", "🤝 التحصيل"], ["stock", "📦 المخزون"], ["sups", "🚚 الموردين"], ["custs", "👥 العملاء"]].map(([k, l]) => `<button style="background:${(A.asub || "money") === k ? "var(--tq)" : "#e2e8f0"};color:${(A.asub || "money") === k ? "#fff" : "#334155"};font-size:13px;padding:9px 2px;border:0;border-radius:12px;font-weight:700;cursor:pointer;white-space:nowrap" data-asub="${k}">${l}</button>`).join("")}</div>`;
+  // =================== 💰 التحصيل ===================
+  const DAY = 864e5, ageD = (d) => Math.floor((Date.now() - new Date(d)) / DAY);
+  const metaOf = (ph) => (A.cmeta || []).find((m) => m.phone === ph) || {};
+  const termsOf = (ph) => { const m = metaOf(ph); return m.terms_days != null ? +m.terms_days : A.settings.default_terms_days != null ? +A.settings.default_terms_days : 30; };
+  // تحليل حساب العميل: أقدم مبلغ مش متسدد (الأقدم بيتسدد الأول)، متوسط أيام السداد، التقييم
+  function custCollect(c) {
+    const lines = [...c.lines].filter((r) => r.a).sort((x, y) => new Date(x.d) - new Date(y.d));
+    const q = [], delays = []; let lastPay = null;
+    lines.forEach((r) => {
+      if (r.a > 0) q.push({ d: r.d, left: r.a });
+      else { let pay = -r.a; lastPay = r.d; while (pay > 0.0005 && q.length) { const h = q[0], u = Math.min(h.left, pay); h.left -= u; pay -= u; if (h.left <= 0.0005) { delays.push(Math.max(0, (new Date(r.d) - new Date(h.d)) / DAY)); q.shift(); } } }
+    });
+    const oldest = q.find((h) => h.left > 0.0005), terms = termsOf(c.phone), m = metaOf(c.phone);
+    const age = oldest ? ageD(oldest.d) : 0, due = oldest ? new Date(new Date(oldest.d).getTime() + terms * DAY) : null, late = oldest ? Math.max(0, age - terms) : 0;
+    const avg = delays.length ? delays.reduce((a, x) => a + x, 0) / delays.length : null;
+    const rate = c.bal <= 0.0005 ? (avg == null || avg <= terms ? "g" : "y") : late > 0 ? "r" : avg != null && avg > terms ? "y" : age > terms / 2 ? "y" : "g";
+    const lim = m.credit_limit != null && m.credit_limit !== "" ? +m.credit_limit : null;
+    return { ...c, terms, age, due, late, avg, rate, lim, over: lim != null && c.bal > lim + 0.0005, lastPay, archived: !!m.archived, lastAct: lines.length ? lines[lines.length - 1].d : null, note: m.note || "" };
+  }
+  const RATE = { g: ["🟢", "بيدفع في ميعاده"], y: ["🟡", "ساعات بيتأخر"], r: ["🔴", "متأخر"] };
+  const custC = (ph) => { const c = custList().find((x) => x.phone === ph) || { phone: ph, name: "", ...custLedger(ph) }; return custCollect(c); };
+  // تقسيم دفع الطلب
+  const splitOf = (o) => { const s = o.pay_split; if (s && (num(s.cash) || num(s.knet) || num(s.credit))) return { cash: num(s.cash), knet: num(s.knet), credit: num(s.credit) }; const p = o.payment || "cash", t = num(o.total); return { cash: p === "cash" ? t : 0, knet: p === "knet_on_delivery" ? t : 0, credit: p === "credit" ? t : 0 }; };
+  // محفظة المندوب الكاملة
+  function dCash(id) {
+    const del = A.orders.filter((o) => o.driver_id === id && o.status === "delivered"), mv = (A.dmoves || []).filter((m) => m.driver_id === id), s = (k) => mv.filter((m) => m.kind === k).reduce((a, m) => a + num(m.amount), 0);
+    const ordCash = del.reduce((a, o) => a + splitOf(o).cash, 0), oldSettle = sum(A.tx.filter((t) => t.kind === "driver_settle" && t.party === id));
+    const cashWith = ordCash + s("collect") - s("handover") - s("expense") - oldSettle;
+    return { del, mv, ordCash, collect: s("collect"), hand: s("handover") + oldSettle, exp: s("expense"), comm: s("commission"), cashWith, earn: del.reduce((a, o) => a + num(o.driver_earning), 0) + s("commission"), paid: s("payout") };
+  }
+  const cTabs = () => { const lim = A.me.role === "accountant"; return `<div class="filters" style="margin-top:6px">${[["day", "📅 اليوم"], ["late", "⏰ المتأخرين"], ["drv", "🛵 المناديب"], ["rep", "📊 التقارير"], ...(lim ? [] : [["log", "📜 السجل"], ["cset", "⚙️ إعدادات"]])].map(([k, l]) => `<button class="${(A.csub || "day") === k ? "on" : ""}" data-csub="${k}">${l}</button>`).join("")}</div>`; };
+  function collectPage() {
+    const v = A.csub || "day";
+    return cTabs() + (v === "late" ? latePage() : v === "drv" ? drvPage() : v === "rep" ? repPage() : v === "log" ? logPage() : v === "cset" ? csetPage() : dayPage());
+  }
+  // ---- 📅 التحصيل اليومي + الدُرج + الكي نت ----
+  function dayFig(day) {
+    const on = (d) => d && dayKey(d) === day, F = { oCash: 0, oKnet: 0, oCredit: 0, sCash: 0, sKnet: 0, sCredit: 0, rCash: 0, rKnet: 0, rDrv: 0, hand: 0, exp: 0, inc: 0, topup: 0 };
+    A.orders.filter((o) => o.status === "delivered" && on(o.delivered_at || o.updated_at || o.created_at)).forEach((o) => { const s = splitOf(o); F.oCash += s.cash; F.oKnet += s.knet; F.oCredit += s.credit; });
+    A.orders.filter((o) => o.status !== "cancelled" && o.status !== "delivered" && o.payment === "credit" && on(o.created_at)).forEach((o) => { F.oCredit += num(o.total); });
+    A.tx.filter((t) => on(t.date || t.created_at)).forEach((t) => {
+      const a = num(t.amount);
+      if (t.kind === "sale") { if (t.category === "credit") F.sCredit += a; else if (t.category === "knet_on_delivery") F.sKnet += a; else F.sCash += a; }
+      else if (t.kind === "receivable_paid" && t.category !== "discount") { if (t.collected_by) F.rDrv += a; else if (t.method === "knet") F.rKnet += a; else F.rCash += a; if (t.category === "topup") F.topup += a; }
+      else if (t.kind === "receivable") F.sCredit += a;
+      else if (t.kind === "driver_settle") F.hand += a; else if (t.kind === "expense") F.exp += a; else if (t.kind === "income") F.inc += a;
+    });
+    (A.dmoves || []).filter((m) => m.kind === "handover" && on(m.created_at)).forEach((m) => { F.hand += num(m.amount); });
+    F.cashIn = F.sCash + F.rCash + F.hand + F.inc; F.expCash = F.cashIn - F.exp; F.knet = F.oKnet + F.sKnet + F.rKnet; F.credit = F.oCredit + F.sCredit; F.collected = F.rCash + F.rKnet + F.rDrv;
+    return F;
+  }
+  function dayPage() {
+    const day = A.cday || dayKey(new Date()), F = dayFig(day), cl = (A.dcloses || []).find((x) => x.day === day);
+    const L = (l, v, c) => `<div class="line"><span>${l}</span><b${c ? ` style="color:${c}"` : ""}>${money(v)}</b></div>`;
+    const diff = (a, b) => { const d = num(a) - num(b); return Math.abs(d) < 0.0005 ? '<b style="color:#16a34a">✓ مظبوط</b>' : d > 0 ? `<b style="color:#16a34a">زيادة ${money(d)}</b>` : `<b style="color:#dc2626">عجز ${money(-d)}</b>`; };
+    return `<div style="display:flex;gap:8px;align-items:center;margin:8px 0"><input class="in" type="date" id="cDay" value="${day}" style="max-width:190px"><button class="btn sm ghost" data-cday="${dayKey(new Date())}">النهارده</button><button class="btn sm ghost" data-cday="${dayKey(Date.now() - DAY)}">إمبارح</button></div>
+      <div class="stats"><div class="stat"><span class="mut">💵 كاش دخل الدُرج</span><b style="color:#16a34a">${money(F.cashIn)}</b></div><div class="stat"><span class="mut">💳 كي نت</span><b>${money(F.knet)}</b></div><div class="stat"><span class="mut">📝 آجل جديد</span><b style="color:#b45309">${money(F.credit)}</b></div><div class="stat"><span class="mut">✅ اتحصّل من الآجل</span><b style="color:#16a34a">${money(F.collected)}</b></div></div>
+      <div class="card"><b>💵 الكاش</b>${L("مبيعات كاش في المحل", F.sCash)}${L("سداد آجل كاش", F.rCash)}${L("استلمته من المناديب", F.hand)}${F.inc ? L("إيرادات تانية", F.inc) : ""}${L("− مصاريف اتدفعت", F.exp, "#dc2626")}<div class="line total"><span>المفروض في الدُرج</span><span>${money(F.expCash)}</span></div>
+        <p class="mut" style="font-size:12px;margin:4px 0 0">كاش الطلبات اللي مع المناديب (${money(F.oCash)}) بيدخل الدُرج لما تستلمه منهم.</p></div>
+      <div class="card"><b>💳 الكي نت</b>${L("طلبات كي نت", F.oKnet)}${L("مبيعات كي نت", F.sKnet)}${L("سداد آجل كي نت", F.rKnet)}<div class="line total"><span>المفروض ينزل البنك</span><span>${money(F.knet)}</span></div></div>
+      ${cl ? `<div class="card" style="border:2px solid #16a34a"><b>🔒 اليوم ده متقفل</b><div class="line"><span>المفروض في الدُرج</span><b>${money(cl.expected_cash)}</b></div><div class="line"><span>عدّيت</span><b>${money(cl.counted_cash)}</b></div><div class="line"><span>النتيجة</span>${diff(cl.counted_cash, cl.expected_cash)}</div>
+        ${cl.bank_knet != null ? `<div class="line"><span>كي نت نزل البنك</span><b>${money(cl.bank_knet)}</b></div><div class="line"><span>مطابقة الكي نت</span>${diff(cl.bank_knet, cl.expected_knet)}</div>` : ""}${cl.note ? `<p class="mut">📝 ${esc(cl.note)}</p>` : ""}<button class="btn sm ghost" data-dclose="${day}">✏️ تعديل الإقفال</button></div>`
+        : `<button class="btn tq block" data-dclose="${day}">🔒 إقفال اليوم (عدّ الدُرج + مطابقة الكي نت)</button>`}`;
+  }
+  function closeSheet2(day) {
+    const F = dayFig(day), cl = (A.dcloses || []).find((x) => x.day === day) || {};
+    sheet(`<h3>🔒 إقفال يوم ${day}</h3>
+      <div class="line"><span>المفروض في الدُرج</span><b>${money(F.expCash)}</b></div>
+      <label class="f"><span>💵 عدّيت كام كاش في الدُرج؟</span><input class="in" id="dcC" type="number" step="0.005" inputmode="decimal" value="${cl.counted_cash != null ? num(cl.counted_cash).toFixed(3) : ""}"></label><div id="dcD" class="mut"></div>
+      <div class="line" style="margin-top:8px"><span>الكي نت المفروض</span><b>${money(F.knet)}</b></div>
+      <label class="f"><span>💳 الكي نت اللي نزل البنك (اختياري)</span><input class="in" id="dcK" type="number" step="0.005" inputmode="decimal" value="${cl.bank_knet != null ? num(cl.bank_knet).toFixed(3) : ""}"></label>
+      <label class="f"><span>ملاحظة</span><input class="in" id="dcN" value="${esc(cl.note || "")}" placeholder="مثال: العجز بسبب فكة"></label>
+      <button class="btn tq block" id="dcS">🔒 إقفال اليوم</button>`, () => {
+      const upd = () => { const v = $("dcC").value; if (v === "") return ($("dcD").textContent = ""); const d = num(v) - F.expCash; $("dcD").innerHTML = Math.abs(d) < 0.0005 ? "✓ مظبوط" : d > 0 ? `<b style="color:#16a34a">زيادة ${money(d)}</b>` : `<b style="color:#dc2626">عجز ${money(-d)}</b>`; };
+      $("dcC").oninput = upd; upd();
+      $("dcS").onclick = async () => { if ($("dcC").value === "") return toast("اكتب الكاش اللي عدّيته", "err"); $("dcS").disabled = true;
+        try { await Store.saveDayClose({ day, expected_cash: +F.expCash.toFixed(3), counted_cash: num($("dcC").value), expected_knet: +F.knet.toFixed(3), bank_knet: $("dcK").value === "" ? null : num($("dcK").value), note: $("dcN").value.trim() || null }); closeSheet(); toast("اتقفل اليوم ✓"); await refresh(); }
+        catch (e) { $("dcS").disabled = false; toast(e.message, "err"); } };
+    });
+  }
+  // ---- ⏰ المتأخرين + حد الآجل + الأرشيف ----
+  function latePage() {
+    const all = custList().map(custCollect), arch = !!A.carch, q = (A.clq || "").trim();
+    const isArch = (c) => c.archived || (c.bal <= 0.0005 && (!c.lastAct || ageD(c.lastAct) > 30));
+    const list = all.filter((c) => (arch ? isArch(c) : !isArch(c) && c.bal > 0.0005) && (!q || (c.name + c.phone).includes(q))).sort((a, b) => b.late - a.late || b.bal - a.bal);
+    const lateN = all.filter((c) => c.late > 0 && !c.archived), owe = all.reduce((a, c) => a + Math.max(0, c.bal), 0), wallet = all.reduce((a, c) => a + Math.max(0, -c.bal), 0);
+    return `<div class="stats"><div class="stat"><span class="mut">برّه عند الزباين</span><b style="color:#dc2626">${money(owe)}</b></div><div class="stat"><span class="mut">متأخرين</span><b style="color:#dc2626">${lateN.length} · ${money(lateN.reduce((a, c) => a + c.bal, 0))}</b></div><div class="stat"><span class="mut">رصيد مقدّم للزباين</span><b style="color:#16a34a">${money(wallet)}</b></div><div class="stat"><span class="mut">عدّوا الحد</span><b>${all.filter((c) => c.over).length}</b></div></div>
+      <div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap"><input class="in" id="clq" placeholder="🔍 دوّر باسم أو رقم" value="${esc(q)}" style="flex:1;min-width:150px"><button class="btn sm ${arch ? "tq" : "ghost"}" data-carch>📁 ${arch ? "رجوع للنشطين" : "الأرشيف"}</button><button class="btn sm" style="background:#be185d" data-newcust>👥 + عميل</button></div>
+      ${list.length ? list.map(lateCard).join("") : `<div class="empty"><div class="e">${arch ? "📁" : "🎉"}</div>${arch ? "الأرشيف فاضي" : "مفيش حد عليه فلوس"}</div>`}`;
+  }
+  function lateCard(c) {
+    const [dot, rl] = RATE[c.rate], pct = c.lim ? Math.min(100, Math.round((Math.max(0, c.bal) / c.lim) * 100)) : 0;
+    return `<div class="card" style="${c.late > 0 ? "border-inline-start:4px solid #dc2626" : ""}"><div class="line"><b>${dot} ${esc(c.name || "عميل")}</b><b style="color:${c.bal > 0.0005 ? "#dc2626" : "#16a34a"}">${c.bal < -0.0005 ? "رصيد " : ""}${money(Math.abs(c.bal))}</b></div>
+      <div class="mut" style="font-size:13px"><a href="tel:+${esc(c.phone)}">${esc(c.phone)}</a> · ${rl}${c.bal > 0.0005 ? ` · ${c.late > 0 ? `<b style="color:#dc2626">متأخر ${c.late} يوم</b>` : `يستحق ${c.due ? fmtDay(c.due) : ""}`}` : ""}${c.lastPay ? ` · آخر دفعة ${fmtDay(c.lastPay)}` : ""}${c.avg != null ? ` · بيسدد في ${Math.round(c.avg)} يوم في المتوسط` : ""}</div>
+      ${c.lim ? `<div style="margin:6px 0"><div style="height:6px;background:#e2e8f0;border-radius:6px"><div style="height:6px;width:${pct}%;background:${c.over ? "#dc2626" : pct > 80 ? "#f59e0b" : "#16a34a"};border-radius:6px"></div></div><small class="mut">الحد ${money(c.lim)}${c.over ? ' – <b style="color:#dc2626">عدّى الحد</b>' : ""}</small></div>` : ""}
+      ${c.note ? `<div class="mut" style="font-size:12px">📝 ${esc(c.note)}</div>` : ""}
+      <div class="acts" style="margin-top:6px">${c.bal > 0.0005 ? `<a class="btn sm" style="background:#16a34a;color:#fff;text-decoration:none" target="_blank" rel="noopener" href="${remindLink(c)}">💬 تذكير</a>` : ""}<button class="btn sm green" data-cpay="${esc(c.phone)}">${c.bal > 0.0005 ? "✅ سداد" : "💳 شحن رصيد"}</button><button class="btn sm ghost" data-cstmt="${esc(c.phone)}">📒 كشف</button><button class="btn sm ghost" data-cmeta="${esc(c.phone)}">⚙️</button></div></div>`;
+  }
+  const fmtDay = (d) => new Date(d).toLocaleDateString("ar-KW", { day: "numeric", month: "short" });
+  function remindLink(c) {
+    const st = A.settings, t = `السلام عليكم ${c.name || ""} 👋\nتذكير ودي من ${st.store_name || "Goten"} 🐟\nالمبلغ المستحق على حسابك: ${money(c.bal)}${c.due ? `\nتاريخ الاستحقاق: ${new Date(c.due).toLocaleDateString("ar-KW")}` : ""}${num(st.early_pay_pct) > 0 ? `\n🎁 لو سددت خلال ${st.early_pay_days || 7} أيام تاخد خصم ${num(st.early_pay_pct)}%` : ""}\nتقدر تسدد كاش أو كي نت مع المندوب أو في المحل. شكراً لتعاملك معانا 🙏`;
+    return `https://wa.me/${c.phone}?text=${encodeURIComponent(t)}`;
+  }
+  function metaSheet(ph) {
+    const c = custC(ph), m = metaOf(ph);
+    sheet(`<h3>⚙️ إعدادات حساب ${esc(c.name || ph)}</h3>
+      <label class="f"><span>حد أقصى للآجل (د.ك) – فاضي = من غير حد</span><input class="in" id="mL" type="number" step="0.5" min="0" inputmode="decimal" value="${m.credit_limit != null ? m.credit_limit : ""}"></label>
+      <label class="f"><span>يسدد خلال كام يوم؟ (فاضي = ${A.settings.default_terms_days ?? 30} يوم)</span><input class="in" id="mT" type="number" min="0" inputmode="numeric" value="${m.terms_days != null ? m.terms_days : ""}"></label>
+      <label class="f"><span>ملاحظة</span><input class="in" id="mN" value="${esc(m.note || "")}" placeholder="مثال: بيدفع أول الشهر"></label>
+      <label class="switch"><span>📁 في الأرشيف</span><input type="checkbox" id="mA" ${m.archived ? "checked" : ""}></label>
+      <button class="btn tq block" id="mS">💾 حفظ</button>`, () => {
+      $("mS").onclick = async () => { try { await Store.saveCustMeta({ phone: ph, credit_limit: $("mL").value === "" ? null : num($("mL").value), terms_days: $("mT").value === "" ? null : parseInt($("mT").value), note: $("mN").value.trim() || null, archived: $("mA").checked }); closeSheet(); toast("اتحفظ ✓"); await refresh(); } catch (e) { toast(/customer_meta/.test(e.message) ? "محتاج تحديث قاعدة البيانات" : e.message, "err"); } };
+    });
+  }
+  // حد الآجل: تنبيه قبل ما الحساب يعدّي الحد
+  async function limitOk(ph, add) {
+    if (!ph) return true; const c = custC(normPh(ph)); if (c.lim == null) return true;
+    const nb = c.bal + num(add); if (nb <= c.lim + 0.0005) return true;
+    return UI.ask(`⚠️ ${c.name || ph} عليه ${money(c.bal)} والحد بتاعه ${money(c.lim)}.\nبعد العملية دي هيبقى عليه ${money(nb)}. تكمّل؟`);
+  }
+  // ---- ✅ سداد (دفعات، طريقة الدفع، المندوب، خصم مبكر، رصيد مقدّم) + سند قبض ----
+  function paySheet(ph) {
+    const c = custC(ph), st = A.settings, drv = A.profiles.filter((p) => p.role === "driver"), bal = Math.max(0, c.bal);
+    const early = num(st.early_pay_pct) > 0 && bal > 0 && c.age <= num(st.early_pay_days || 7) ? Math.round(bal * num(st.early_pay_pct) * 10) / 1000 : 0;
+    sheet(`<h3>${bal > 0 ? "✅ سداد من" : "💳 شحن رصيد لـ"} ${esc(c.name || ph)}</h3>
+      <div class="line"><span>${c.bal >= 0 ? "عليه دلوقتي" : "رصيده المقدّم"}</span><b style="color:${c.bal > 0 ? "#dc2626" : "#16a34a"}">${money(Math.abs(c.bal))}</b></div>
+      <label class="f"><span>المبلغ اللي دفعه (تقدر تكتب جزء بس)</span><input class="in" id="pyA" type="number" step="0.005" min="0" inputmode="decimal" value="${bal ? bal.toFixed(3) : ""}"></label>
+      <div id="pyR" class="mut" style="margin:-4px 0 8px"></div>
+      <label class="f"><span>دفع إزاي؟</span><select class="in" id="pyM"><option value="cash">💵 كاش</option><option value="knet">💳 كي نت</option></select></label>
+      ${drv.length ? `<label class="f"><span>مين استلم الفلوس؟</span><select class="in" id="pyD"><option value="">🏪 أنا / المحل</option>${drv.map((d) => `<option value="${d.id}">🛵 ${esc(d.full_name || "مندوب")}</option>`).join("")}</select></label>${num(st.collect_commission_pct) > 0 ? `<p class="mut" style="font-size:12px;margin-top:-4px">المندوب بياخد عمولة ${num(st.collect_commission_pct)}% على اللي يحصّله.</p>` : ""}` : ""}
+      ${early ? `<label class="switch" style="background:#fef3c7;padding:8px;border-radius:10px"><span>🎁 خصم سداد مبكر ${num(st.early_pay_pct)}% (${money(early)}) – لو سدد المبلغ كله</span><input type="checkbox" id="pyE"></label>` : ""}
+      <label class="f"><span>ملاحظة (اختياري)</span><input class="in" id="pyN"></label>
+      <button class="btn green block" id="pyS">✅ تسجيل الدفعة وطلّع سند قبض</button>`, () => {
+      const upd = () => { const a = num($("pyA").value), e = $("pyE") && $("pyE").checked ? early : 0, r = c.bal - a - e; $("pyR").innerHTML = !a ? "" : r > 0.0005 ? `هيفضل عليه <b>${money(r)}</b>` : r < -0.0005 ? `هيبقى ليه رصيد مقدّم <b style="color:#16a34a">${money(-r)}</b>` : '<b style="color:#16a34a">هيبقى خالص ✓</b>'; };
+      $("pyA").oninput = upd; if ($("pyE")) $("pyE").onchange = () => { if ($("pyE").checked) $("pyA").value = (bal - early).toFixed(3); upd(); }; upd();
+      $("pyS").onclick = async () => {
+        const a = num($("pyA").value); if (!(a > 0)) return toast("اكتب المبلغ", "err");
+        if (num(st.big_payment) > 0 && a >= num(st.big_payment) && !(await UI.ask(`المبلغ ${money(a)} كبير. متأكد إنه صح؟`))) return;
+        const dv = $("pyD") ? $("pyD").value : "", e = $("pyE") && $("pyE").checked ? early : 0, M = $("pyM").value, note = $("pyN").value.trim();
+        $("pyS").disabled = true;
+        try {
+          const r = await Store.saveTransaction({ kind: "receivable_paid", amount: a, date: dayKey(new Date()), party: ph, party_name: c.name || null, note: note || null, method: M, collected_by: dv || null, category: c.bal <= 0.0005 ? "topup" : a > bal + 0.0005 ? "topup" : null });
+          if (e) await Store.saveTransaction({ kind: "receivable_paid", amount: e, date: dayKey(new Date()), party: ph, party_name: c.name || null, note: "خصم سداد مبكر", category: "discount" });
+          if (dv && M === "cash") await Store.addDriverMove({ driver_id: dv, kind: "collect", amount: a, note: `تحصيل من ${c.name || ph}` });
+          if (dv && num(st.collect_commission_pct) > 0) { const cm = Math.round(a * num(st.collect_commission_pct) * 10) / 1000; if (cm > 0) await Store.addDriverMove({ driver_id: dv, kind: "commission", amount: cm, note: `عمولة تحصيل من ${c.name || ph}` }); }
+          closeSheet(); await refresh(); receiptSheet({ ...(r || {}), amount: a, method: M, party: ph, party_name: c.name, created_at: (r && r.created_at) || new Date().toISOString(), disc: e, collected_by: dv });
+        } catch (err) { $("pyS").disabled = false; toast(err.message, "err"); }
+      };
+    });
+  }
+  function receiptText(t, after) {
+    const st = A.settings, drv = t.collected_by && A.profiles.find((p) => p.id === t.collected_by);
+    return `🧾 سند قبض${t.receipt_no ? " رقم " + t.receipt_no : ""} – ${st.store_name || "Goten"}\nالتاريخ: ${new Date(t.created_at).toLocaleString("ar-KW")}\nاستلمنا من: ${t.party_name || ""} (${t.party})\nالمبلغ: ${money(t.amount)} – ${t.method === "knet" ? "كي نت" : "كاش"}${t.disc ? `\nخصم سداد مبكر: ${money(t.disc)}` : ""}${drv ? `\nاستلمها: ${drv.full_name}` : ""}\n${after > 0.0005 ? `المتبقي عليك: ${money(after)}` : after < -0.0005 ? `رصيدك المقدّم: ${money(-after)}` : "حسابك خالص ✓"}`;
+  }
+  function receiptSheet(t) {
+    const after = custC(t.party).bal, txt = receiptText(t, after), thanks = `${txt}\n\nشكراً ${t.party_name || ""} على السداد 🙏 دايماً في خدمتك – ${A.settings.store_name || "Goten"} 🐟`;
+    sheet(`<h3>🧾 سند قبض${t.receipt_no ? " #" + t.receipt_no : ""}</h3><div class="card" style="white-space:pre-line;line-height:1.9">${esc(txt)}</div>
+      <a class="btn green block" style="text-decoration:none;text-align:center" target="_blank" rel="noopener" href="https://wa.me/${esc(t.party)}?text=${encodeURIComponent(thanks)}">💬 ابعت السند + رسالة شكر</a>
+      <button class="btn ghost block" style="margin-top:8px" data-printrec='${esc(JSON.stringify({ n: t.receipt_no, txt }))}'>🖨️ طباعة / PDF</button>`);
+  }
+  function printDoc(title, html) {
+    const w = window.open("", "_blank"); if (!w) return toast("اسمح بفتح النوافذ علشان تطبع", "err");
+    w.document.write(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>body{font-family:-apple-system,Segoe UI,Tahoma,sans-serif;padding:24px;color:#0b2545}h1{font-size:20px;margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}td,th{border-bottom:1px solid #e2e8f0;padding:6px;text-align:right}th{background:#f1f5f9}.tot{font-weight:800;font-size:16px}.mut{color:#64748b;font-size:12px}pre{white-space:pre-wrap;font-family:inherit;font-size:15px;line-height:1.9}@media print{button{display:none}}</style></head><body>${html}<p><button onclick="print()">🖨️ طباعة / حفظ PDF</button></p><script>setTimeout(()=>print(),400)<\/script></body></html>`);
+    w.document.close();
+  }
+  function splitSheet(id) {
+    const o = A.orders.find((x) => x.id === id), sp = splitOf(o), T = num(o.total);
+    sheet(`<h3>➗ تقسيم دفع طلب #${o.order_no}</h3><div class="line"><span>إجمالي الطلب</span><b>${money(T)}</b></div>
+      <div class="row3"><label class="f"><span>💵 كاش</span><input class="in" id="spC" type="number" step="0.005" min="0" inputmode="decimal" value="${sp.cash.toFixed(3)}"></label><label class="f"><span>💳 كي نت</span><input class="in" id="spK" type="number" step="0.005" min="0" inputmode="decimal" value="${sp.knet.toFixed(3)}"></label><label class="f"><span>📝 آجل</span><input class="in" id="spR" type="number" step="0.005" min="0" inputmode="decimal" value="${sp.credit.toFixed(3)}"></label></div>
+      <div id="spD"></div><button class="btn tq block" id="spS">💾 حفظ التقسيم</button>${o.pay_split ? '<button class="btn ghost block" id="spX" style="margin-top:8px">إلغاء التقسيم</button>' : ""}`, () => {
+      const g = () => ({ cash: num($("spC").value), knet: num($("spK").value), credit: num($("spR").value) });
+      const upd = () => { const x = g(), d = T - x.cash - x.knet - x.credit; $("spD").innerHTML = Math.abs(d) < 0.0005 ? '<b style="color:#16a34a">✓ المجموع مظبوط</b>' : `<b style="color:#dc2626">${d > 0 ? "ناقص" : "زيادة"} ${money(Math.abs(d))}</b>`; };
+      ["spC", "spK", "spR"].forEach((k) => ($(k).oninput = upd)); upd();
+      $("spS").onclick = async () => { const x = g(); if (Math.abs(T - x.cash - x.knet - x.credit) >= 0.0005) return toast("المجموع لازم يساوي إجمالي الطلب", "err");
+        const parts = Object.entries(x).filter(([, v]) => v > 0.0005), main = parts.length === 1 ? { cash: "cash", knet: "knet_on_delivery", credit: "credit" }[parts[0][0]] : x.credit > 0.0005 ? "credit" : x.knet >= x.cash ? "knet_on_delivery" : "cash";
+        if (x.credit > 0.0005 && !(await limitOk(o.phone, x.credit - splitOf(o).credit))) return;
+        try { await Store.updateOrder(id, { pay_split: parts.length > 1 ? x : null, payment: main }); closeSheet(); toast("اتحفظ ✓"); await refresh(); } catch (e) { toast(/pay_split/.test(e.message) ? "محتاج تحديث قاعدة البيانات" : e.message, "err"); } };
+      if ($("spX")) $("spX").onclick = async () => { await Store.updateOrder(id, { pay_split: null }); closeSheet(); await refresh(); };
+    });
+  }
+  function printStmt(ph) {
+    const c = custC(ph), st = A.settings;
+    printDoc("كشف حساب " + (c.name || ph), `<h1>${esc(st.store_name || "Goten")} – كشف حساب</h1><div class="mut">${esc(c.name || "")} · ${esc(ph)} · ${new Date().toLocaleDateString("ar-KW")}</div>
+      <table><tr><th>التاريخ</th><th>البيان</th><th>عليه</th><th>دفع</th><th>الرصيد</th></tr>${c.lines.filter((r) => r.a).map((r) => `<tr><td>${dayKey(r.d)}</td><td>${esc(r.l.replace(/^\S+ /, ""))}</td><td>${r.a > 0 ? r.a.toFixed(3) : ""}</td><td>${r.a < 0 ? (-r.a).toFixed(3) : ""}</td><td>${r.run.toFixed(3)}</td></tr>`).join("")}</table>
+      <p class="tot">${c.bal >= 0 ? "المطلوب" : "رصيد مقدّم"}: ${money(Math.abs(c.bal))}</p>${c.due && c.bal > 0 ? `<p class="mut">تاريخ الاستحقاق: ${new Date(c.due).toLocaleDateString("ar-KW")}</p>` : ""}`);
+  }
+  // ---- 🛵 تسوية المناديب + مصاريفهم ----
+  function drvPage() {
+    const ds = A.profiles.filter((p) => p.role === "driver");
+    if (!ds.length) return '<div class="empty"><div class="e">🛵</div>مفيش مناديب</div>';
+    return ds.map((p) => { const w = dCash(p.id), exps = w.mv.filter((m) => m.kind === "expense").slice(0, 5);
+      return `<div class="card"><div class="line"><b>🛵 ${esc(p.full_name || "مندوب")}</b><span class="mut">${w.del.length} توصيلة</span></div>
+        <div class="line"><span>كاش طلبات حصّلها</span><b>${money(w.ordCash)}</b></div>${w.collect ? `<div class="line"><span>+ حصّل آجل من زباين</span><b>${money(w.collect)}</b></div>` : ""}
+        <div class="line"><span>− سلّمهولك</span><b>${money(w.hand)}</b></div><div class="line"><span>− مصاريف (بنزين وغيره)</span><b>${money(w.exp)}</b></div>
+        <div class="line total"><span>المفروض معاه</span><span style="color:${w.cashWith > 0.0005 ? "#b45309" : "#16a34a"}">${money(w.cashWith)}</span></div>
+        <div class="line"><span>أرباحه + عمولاته اللي ليه</span><b style="color:#16a34a">${money(w.earn - w.paid)}</b></div>
+        ${exps.length ? `<div class="mut" style="font-size:12px;margin-top:4px">آخر مصاريفه: ${exps.map((m) => `${esc(m.category || m.note || "مصروف")} ${money(m.amount)}`).join(" · ")}</div>` : ""}
+        <div class="acts"><button class="btn sm green" data-dsettle="${p.id}">🤝 تسوية – استلمت الكاش</button><button class="btn sm tq" data-dmove="${p.id}:payout">💸 صرفتله أرباح</button><button class="btn sm ghost" data-dmlog="${p.id}">📜 الحركات</button></div></div>`; }).join("");
+  }
+  function settleSheet(id) {
+    const p = A.profiles.find((x) => x.id === id), w = dCash(id);
+    sheet(`<h3>🤝 تسوية ${esc(p.full_name || "المندوب")}</h3><div class="line"><span>المفروض معاه</span><b>${money(w.cashWith)}</b></div>
+      <label class="f"><span>سلّمك كام فعلاً؟</span><input class="in" id="stA" type="number" step="0.005" inputmode="decimal" value="${Math.max(0, w.cashWith).toFixed(3)}"></label><div id="stD"></div>
+      <label class="f"><span>ملاحظة</span><input class="in" id="stN"></label><button class="btn green block" id="stS">✅ تسجيل الاستلام</button>`, () => {
+      const upd = () => { const d = num($("stA").value) - w.cashWith; $("stD").innerHTML = Math.abs(d) < 0.0005 ? '<b style="color:#16a34a">✓ مظبوط</b>' : d < 0 ? `<b style="color:#dc2626">ناقص ${money(-d)} – هيفضل معاه</b>` : `<b style="color:#b45309">زيادة ${money(d)}</b>`; };
+      $("stA").oninput = upd; upd();
+      $("stS").onclick = async () => { const a = num($("stA").value); if (!(a > 0)) return toast("اكتب المبلغ", "err"); const d = a - w.cashWith; $("stS").disabled = true;
+        try { await Store.addDriverMove({ driver_id: id, kind: "handover", amount: a, note: [ "تسوية", Math.abs(d) >= 0.0005 ? (d < 0 ? "ناقص " : "زيادة ") + Math.abs(d).toFixed(3) : "", $("stN").value.trim()].filter(Boolean).join(" – ") }); closeSheet(); toast("اتسجّل ✓"); await refresh(); }
+        catch (e) { $("stS").disabled = false; toast(e.message, "err"); } };
+    });
+  }
+  // ---- 📊 التقارير + التصدير ----
+  function repPage() {
+    const all = custList().map(custCollect), pays = A.tx.filter((t) => t.kind === "receivable_paid" && t.category !== "discount" && inPeriod(t.date || t.created_at));
+    const coll = sum(pays), byM = { cash: sum(pays.filter((t) => t.method !== "knet" && !t.collected_by)), knet: sum(pays.filter((t) => t.method === "knet")), drv: sum(pays.filter((t) => t.collected_by && t.method !== "knet")) };
+    const newCr = all.reduce((a, c) => a + c.lines.filter((r) => r.a > 0 && inPeriod(r.d)).reduce((x, r) => x + r.a, 0), 0), disc = sum(A.tx.filter((t) => t.kind === "receivable_paid" && t.category === "discount" && inPeriod(t.date || t.created_at)));
+    const late = all.filter((c) => c.late > 0).sort((a, b) => b.late - a.late).slice(0, 5), closes = (A.dcloses || []).filter((c) => inPeriod(c.day + "T12:00:00"));
+    const short = closes.reduce((a, c) => a + (num(c.counted_cash) - num(c.expected_cash)), 0);
+    return `<div class="filters">${PERIODS.map(([k, l]) => `<button class="${A.period === k ? "on" : ""}" data-period="${k}">${l}</button>`).join("")}</div>
+      <div class="stats"><div class="stat"><span class="mut">اتحصّل</span><b style="color:#16a34a">${money(coll)}</b></div><div class="stat"><span class="mut">آجل جديد</span><b style="color:#b45309">${money(newCr)}</b></div><div class="stat"><span class="mut">برّه دلوقتي</span><b style="color:#dc2626">${money(all.reduce((a, c) => a + Math.max(0, c.bal), 0))}</b></div><div class="stat"><span class="mut">نسبة التحصيل</span><b>${newCr ? Math.round((coll / newCr) * 100) + "%" : "—"}</b></div></div>
+      <div class="card"><b>اتحصّل إزاي</b><div class="line"><span>💵 كاش في المحل</span><b>${money(byM.cash)}</b></div><div class="line"><span>💳 كي نت</span><b>${money(byM.knet)}</b></div><div class="line"><span>🛵 حصّله المناديب</span><b>${money(byM.drv)}</b></div>${disc ? `<div class="line"><span>🎁 خصومات سداد مبكر</span><b>${money(disc)}</b></div>` : ""}</div>
+      <div class="card"><b>🔴 أكتر الزباين المتأخرين</b>${late.map((c) => `<div class="line"><span>${esc(c.name || c.phone)} <small class="mut">متأخر ${c.late} يوم</small></span><b style="color:#dc2626">${money(c.bal)}</b></div>`).join("") || '<p class="mut">مفيش متأخرين 🎉</p>'}</div>
+      <div class="card"><b>🔒 إقفال الأيام (${closes.length})</b>${closes.slice(0, 10).map((c) => { const d = num(c.counted_cash) - num(c.expected_cash); return `<div class="line"><span>${c.day}</span><b style="color:${Math.abs(d) < 0.0005 ? "#16a34a" : d < 0 ? "#dc2626" : "#b45309"}">${Math.abs(d) < 0.0005 ? "✓" : (d > 0 ? "+" : "") + d.toFixed(3)}</b></div>`; }).join("") || '<p class="mut">لسه مفيش أيام متقفلة.</p>'}${closes.length ? `<div class="line total"><span>إجمالي ${short < 0 ? "العجز" : "الزيادة"}</span><span>${money(Math.abs(short))}</span></div>` : ""}</div>
+      <button class="btn ghost block" data-cexport>📊 تصدير تقرير التحصيل Excel</button>`;
+  }
+  function exportCollect() {
+    const all = custList().map(custCollect), rows = [["👥 حسابات الزباين"], ["العميل", "الهاتف", "عليه", "الحد", "أيام السداد", "متأخر (يوم)", "التقييم", "آخر دفعة"]];
+    all.filter((c) => Math.abs(c.bal) > 0.0005 || c.bought).forEach((c) => rows.push([c.name || "", c.phone, c.bal.toFixed(3), c.lim != null ? c.lim.toFixed(3) : "", c.terms, c.late || "", RATE[c.rate][1], c.lastPay ? dayKey(c.lastPay) : ""]));
+    rows.push([], ["🧾 سندات القبض في الفترة"], ["رقم السند", "التاريخ", "العميل", "المبلغ", "الطريقة", "استلمها", "ملاحظة"]);
+    A.tx.filter((t) => t.kind === "receivable_paid" && inPeriod(t.date || t.created_at)).forEach((t) => rows.push([t.receipt_no || "", t.date || dayKey(t.created_at), t.party_name || t.party, num(t.amount).toFixed(3), t.category === "discount" ? "خصم" : t.method === "knet" ? "كي نت" : "كاش", (A.profiles.find((p) => p.id === t.collected_by) || {}).full_name || "", t.note || ""]));
+    rows.push([], ["🔒 إقفال الأيام"], ["اليوم", "المفروض كاش", "اتعدّ", "الفرق", "كي نت مفروض", "كي نت البنك"]);
+    (A.dcloses || []).filter((c) => inPeriod(c.day + "T12:00:00")).forEach((c) => rows.push([c.day, num(c.expected_cash).toFixed(3), num(c.counted_cash).toFixed(3), (num(c.counted_cash) - num(c.expected_cash)).toFixed(3), num(c.expected_knet).toFixed(3), c.bank_knet != null ? num(c.bank_knet).toFixed(3) : ""]));
+    const csv = "﻿" + rows.map((r) => r.map((x) => `"${String(x == null ? "" : x).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); a.download = `goten-collections-${dayKey(new Date())}.csv`; a.click();
+  }
+  // ---- 📜 سجل التعديلات ----
+  function logPage() {
+    const L = A.alog || [], AC = { insert: "➕ سجّل", update: "✏️ عدّل", delete: "🗑️ مسح" }, TB = { transactions: "حركة حسابات", driver_moves: "حركة مندوب", day_closes: "إقفال يوم", orders: "طلب" };
+    return `<p class="mut">آخر 300 عملية على الفلوس: مين عملها وامتى.</p>${L.length ? L.map((r) => { const i = r.info || {}; return `<div class="card" style="padding:10px"><div class="line"><b>${AC[r.action] || r.action} ${TB[r.tbl] || r.tbl}${i.no ? " #" + esc(i.no) : ""}</b><span class="mut" style="font-size:12px">${new Date(r.at).toLocaleString("ar-KW")}</span></div>
+      <div class="mut" style="font-size:13px">👤 ${esc(r.actor_name || "—")}${i.party ? " · " + esc(i.party) : ""}${i.kind ? " · " + esc(KINDS[i.kind] || i.kind) : ""}${i.note ? " · " + esc(i.note) : ""}</div>
+      ${r.amount_old != null || r.amount_new != null ? `<div style="font-size:14px">${r.amount_old != null ? `<s class="mut">${money(r.amount_old)}</s> ` : ""}${r.amount_new != null ? `<b>${money(r.amount_new)}</b>` : ""}</div>` : ""}${i.pay_old && i.pay_new && i.pay_old !== i.pay_new ? `<div class="mut" style="font-size:12px">الدفع: ${esc(PAY[i.pay_old] || i.pay_old)} ← ${esc(PAY[i.pay_new] || i.pay_new)}</div>` : ""}</div>`; }).join("") : '<p class="mut">لسه مفيش عمليات.</p>'}`;
+  }
+  // ---- ⚙️ إعدادات التحصيل ----
+  function csetPage() {
+    const s = A.settings, fi = (k, l, d, ex = "") => `<label class="f"><span>${l}</span><input class="in" id="cs_${k}" type="number" ${ex} value="${s[k] != null ? s[k] : d}"></label>`;
+    return `<div class="card">${fi("default_terms_days", "الزبون يسدد الآجل خلال كام يوم (الافتراضي)", 30, 'min="0" inputmode="numeric"')}${fi("overdue_days", "ابعتلي إشعار بالمتأخرين كل يوم الصبح – لو عدّى كام يوم من غير ما يدفع", 7, 'min="1" inputmode="numeric"')}
+      ${fi("big_payment", "نبّهني لو اتسجّل مبلغ أكبر من (د.ك) – 0 = من غير تنبيه", 100, 'step="1" min="0" inputmode="decimal"')}
+      <div class="row2">${fi("early_pay_pct", "خصم السداد المبكر %", 0, 'step="0.5" min="0" max="50" inputmode="decimal"')}${fi("early_pay_days", "لو سدد خلال كام يوم", 7, 'min="1" inputmode="numeric"')}</div>
+      ${fi("collect_commission_pct", "عمولة المندوب على تحصيل الآجل %", 0, 'step="0.5" min="0" max="50" inputmode="decimal"')}
+      <button class="btn tq block" id="csSave">💾 حفظ</button></div>
+      <div class="card"><b>👤 حساب محاسب</b><p class="mut">من «المناديب والحسابات» غيّر نوع الحساب لـ «محاسب». المحاسب بيشوف الطلبات والحسابات والتحصيل ويسجّل فيهم، ومش بيقدر يعدّل المنتجات والأسعار والإعدادات، ولا يشوف سجل التعديلات.</p></div>`;
+  }
+  async function saveCset() {
+    const g = (k) => num($("cs_" + k).value);
+    try { await Store.saveSettings({ default_terms_days: Math.max(0, Math.round(g("default_terms_days"))), overdue_days: Math.max(1, Math.round(g("overdue_days"))), big_payment: Math.max(0, g("big_payment")), early_pay_pct: Math.min(50, Math.max(0, g("early_pay_pct"))), early_pay_days: Math.max(1, Math.round(g("early_pay_days"))), collect_commission_pct: Math.min(50, Math.max(0, g("collect_commission_pct"))) }); toast("اتحفظ ✓"); await refresh(); }
+    catch (e) { toast(/column/.test(e.message) ? "محتاج تحديث قاعدة البيانات" : e.message, "err"); }
+  }
   function accounts() {
+    if (A.asub === "collect") return subTabs() + collectPage();
     if (A.asub === "stock") return subTabs() + stock();
     if (A.asub === "sups") return subTabs() + supsPage();
     if (A.asub === "custs") return subTabs() + custsPage();
@@ -318,8 +579,9 @@
           const ph = ($("tPhone").value || "").replace(/\D/g, ""); row.party_name = $("tPName").value.trim() || null;
           if (ph) row.party = /^[124569]\d{7}$/.test(ph) ? "965" + ph : ph;
           if (row.category === "credit" && !row.party) return toast("البيع الآجل محتاج رقم الزبون", "err");
+          if (row.category === "credit" && !(await limitOk(row.party, row.amount))) return;
         }
-        if (isRec) { const ph = ($("tPhone").value || "").replace(/\D/g, ""); if (!ph) return toast("اكتب رقم الزبون", "err"); row.party = /^[124569]\d{7}$/.test(ph) ? "965" + ph : ph; row.party_name = $("tPName").value.trim() || null; }
+        if (isRec) { const ph = ($("tPhone").value || "").replace(/\D/g, ""); if (!ph) return toast("اكتب رقم الزبون", "err"); row.party = /^[124569]\d{7}$/.test(ph) ? "965" + ph : ph; row.party_name = $("tPName").value.trim() || null; if (kind === "receivable" && !(await limitOk(row.party, row.amount))) return; }
         try { $("tSave").disabled = true; await Store.saveTransaction(row); const owed = sup ? await payWithPurchase(sup, amount) : 0; closeSheet(); toast("اتسجّل ✓" + (owed > 0.0005 ? ` · فاضل عليك للمورد ${money(owed)}` : "")); await refresh(); } catch (e) { toast(e.message.includes("transactions") ? "شغّل كود SQL بتاع الحسابات الأول" : e.message, "err"); $("tSave").disabled = false; }
       };
     });
@@ -328,7 +590,7 @@
   const normPh = (v) => { let p = String(v || "").replace(/\D/g, ""); if (/^[124569]\d{7}$/.test(p)) p = "965" + p; return p; };
   function custLedger(phone) {
     const L = [];
-    A.orders.filter((o) => normPh(o.phone) === phone && o.status !== "cancelled").forEach((o) => { if (o.payment === "credit") L.push({ d: o.created_at, l: `🧾 طلب #${o.order_no} (آجل)`, a: num(o.total), buy: num(o.total) }); else if (o.status === "delivered") L.push({ d: o.created_at, l: `🧾 طلب #${o.order_no} (${(PAY[o.payment || "cash"] || "").replace(/^\S+ /, "")})`, a: 0, buy: num(o.total) }); });
+    A.orders.filter((o) => normPh(o.phone) === phone && o.status !== "cancelled").forEach((o) => { const sc = o.payment === "credit" ? (o.pay_split ? num(o.pay_split.credit) : num(o.total)) : 0; if (sc > 0) L.push({ d: o.created_at, l: `🧾 طلب #${o.order_no} (${sc < num(o.total) - 0.0005 ? "جزء آجل" : "آجل"})`, a: sc, buy: num(o.total) }); else if (o.status === "delivered") L.push({ d: o.created_at, l: `🧾 طلب #${o.order_no} (${(PAY[o.payment || "cash"] || "").replace(/^\S+ /, "")})`, a: 0, buy: num(o.total) }); });
     A.tx.filter((t) => t.party && normPh(t.party) === phone).forEach((t) => {
       const d = t.date || t.created_at, c = t.created_at;
       if (t.kind === "sale") L.push({ d, c, l: `🛍️ ${t.note || "مبيعات"} (${(PAY[t.category] || PAY.cash).replace(/^\S+ /, "")})`, a: t.category === "credit" ? num(t.amount) : 0, buy: num(t.amount), id: t.id });
@@ -388,7 +650,7 @@
       <div class="stats" style="margin:8px 0"><div class="stat"><span class="mut">إجمالي مشترياته</span><b>${money(c.bought)}</b></div><div class="stat"><span class="mut">${c.bal >= 0 ? "عليه" : "ليه عندك"}</span><b style="color:${c.bal > 0.0005 ? "#dc2626" : "#16a34a"}">${money(Math.abs(c.bal))}</b></div></div>
       <div class="card">${c.lines.map((r) => `<div class="line"><span>${esc(r.l)}<br><small class="mut">${dayKey(r.d)}${r.a ? " · الرصيد " + money(r.run) : " · مدفوع"}</small></span><b style="color:${r.a > 0 ? "#dc2626" : r.a < 0 ? "#16a34a" : "#64748b"};direction:ltr">${r.a ? (r.a > 0 ? "+" : "") + r.a.toFixed(3) : money(r.buy)}</b></div>`).join("") || '<p class="mut">لسه مفيش حركات.</p>'}
         <div class="line total"><span>${c.bal >= 0 ? "عليه" : "ليه عندك"}</span><span>${money(Math.abs(c.bal))}</span></div></div>
-      <div class="row2">${c.bal > 0.0005 ? `<button class="btn green" data-cpay="${esc(phone)}">✅ سداد</button>` : `<span></span>`}<a class="btn ghost" target="_blank" rel="noopener" href="https://wa.me/${esc(phone)}?text=${encodeURIComponent(txt)}">💬 ابعت الكشف</a></div>`);
+      <div class="row2">${c.bal > 0.0005 ? `<button class="btn green" data-cpay="${esc(phone)}">✅ سداد</button>` : `<span></span>`}<a class="btn ghost" target="_blank" rel="noopener" href="https://wa.me/${esc(phone)}?text=${encodeURIComponent(txt)}">💬 ابعت الكشف</a></div><button class="btn ghost block" style="margin-top:8px" data-pstmt="${esc(phone)}">🖨️ طباعة / PDF</button>`);
   }
   // ---------- الموردين ----------
   const supOf = (id) => (id && (A.sups || []).find((x) => x.id === id)) || null;
@@ -659,11 +921,8 @@
 
   // ---------- المناديب ----------
   function dWallet(id) {
-    const del = A.orders.filter((o) => o.driver_id === id && o.status === "delivered"), mv = (A.dmoves || []).filter((m) => m.driver_id === id);
-    const cash = del.filter((o) => (o.payment || "cash") === "cash").reduce((a, o) => a + num(o.total), 0), earn = del.reduce((a, o) => a + num(o.driver_earning), 0);
-    const hand = mv.filter((m) => m.kind === "handover").reduce((a, m) => a + num(m.amount), 0), paid = mv.filter((m) => m.kind === "payout").reduce((a, m) => a + num(m.amount), 0);
-    const today = del.filter((o) => isToday(o.delivered_at || o.updated_at));
-    return { n: del.length, today: today.length, cash, earn, hand, paid, cashWith: cash - hand, due: earn - paid, mv };
+    const w = dCash(id), today = w.del.filter((o) => isToday(o.delivered_at || o.updated_at));
+    return { n: w.del.length, today: today.length, cash: w.ordCash, earn: w.earn, hand: w.hand, paid: w.paid, cashWith: w.cashWith, due: w.earn - w.paid, mv: w.mv };
   }
   function walletCards() {
     const ds = A.profiles.filter((p) => p.role === "driver"); if (!ds.length) return "";
@@ -685,10 +944,10 @@
   }
   function dMoveLog(id) {
     const w = dWallet(id);
-    sheet(`<h3>📜 حركات المندوب</h3>${w.mv.map((m) => `<div class="line"><span>${m.kind === "payout" ? "💸 صرفتله" : "💵 استلمت"} ${fmtDate(m.created_at)}${m.note ? " – " + esc(m.note) : ""}</span><span><b>${money(m.amount)}</b> <button class="btn sm ghost" data-dmdel="${m.id}">🗑️</button></span></div>`).join("")}`);
+    sheet(`<h3>📜 حركات المندوب</h3>${w.mv.map((m) => `<div class="line"><span>${({ payout: "💸 صرفتله", handover: "💵 استلمت", expense: "⛽ مصروف", collect: "🧾 حصّل آجل", commission: "🎁 عمولة" })[m.kind] || m.kind}${m.category ? " " + esc(m.category) : ""} ${fmtDate(m.created_at)}${m.note ? " – " + esc(m.note) : ""}</span><span><b>${money(m.amount)}</b> <button class="btn sm ghost" data-dmdel="${m.id}">🗑️</button></span></div>`).join("")}`);
   }
   function team() {
-    const R = { pending: "بانتظار الموافقة", driver: "مندوب", admin: "أدمن", blocked: "موقوف" };
+    const R = { pending: "بانتظار الموافقة", driver: "مندوب", accountant: "محاسب", admin: "أدمن", blocked: "موقوف" };
     return `${walletCards()}<div class="h2">المناديب والحسابات ${Store.live ? "" : '<button class="btn tq sm" data-adddrv>+ مندوب</button>'}</div>
       <p class="mut">${Store.live ? "المندوب يسجّل من صفحة المناديب (driver.html)، وبعدها توافق عليه هنا بتغيير الصلاحية إلى «مندوب»." : "في الوضع التجريبي تقدر تضيف مناديب مباشرة."}</p>
       <div class="list">${A.profiles.map((p) => { const n = A.orders.filter((o) => o.driver_id === p.id && !["delivered", "cancelled"].includes(o.status)).length; return `<div class="it"><div style="font-size:30px">${p.role === "driver" ? "🛵" : p.role === "admin" ? "🛡️" : "👤"}</div><div class="t"><b>${esc(p.full_name || "بدون اسم")}</b><span class="mut">${esc(p.phone || "")}${p.role === "driver" ? ` · طلبات جارية: ${n}` : ""}</span></div>
@@ -779,10 +1038,13 @@
       const v = (k) => $("s_" + k).value.trim();
       try { await Store.saveSettings({ store_open: $("s_store_open").checked, delivery_fee: num(v("delivery_fee")), min_order: num(v("min_order")), free_delivery_over: v("free_delivery_over") ? num(v("free_delivery_over")) : null, whatsapp: v("whatsapp").replace(/\D/g, ""), notice_ar: v("notice_ar"), notice_en: v("notice_en"), ...(v("delivery_eta") || A.settings.delivery_eta ? { delivery_eta: v("delivery_eta") || null } : {}), ...("slots" in A.settings || !Store.live ? { slots: $("s_slots").value.split(/\n+/).map((x) => x.trim()).filter(Boolean), slot_days: Math.max(1, Math.min(7, parseInt(v("slot_days")) || 2)), slot_cutoff: Math.max(0, parseInt(v("slot_cutoff")) || 0), allow_asap: $("s_allow_asap").checked } : {}), ...("points_on" in A.settings || !Store.live ? { points_on: $("s_points_on").checked, points_per_kd: Math.max(0, num(v("points_per_kd"))), point_value: Math.max(0, num(v("point_value"))), points_min: Math.max(0, parseInt(v("points_min")) || 0) } : {}), ...("auto_driver" in A.settings || !Store.live ? { auto_driver: $("s_auto_driver").value || null } : {}), ...("driver_pay" in A.settings || !Store.live ? { driver_pay: Math.max(0, num(v("driver_pay"))) } : {}) }); toast("تم الحفظ ✓"); await refresh(); } catch (e) { toast(e.message, "err"); }
     };
+    const cd = $("cDay"); if (cd) cd.onchange = () => { A.cday = cd.value || dayKey(new Date()); render(); };
+    const clq = $("clq"); if (clq) clq.oninput = (e) => { A.clq = e.target.value; const pos = e.target.selectionStart; render(); $("clq").focus(); $("clq").setSelectionRange(pos, pos); };
+    const csS = $("csSave"); if (csS) csS.onclick = saveCset;
     const rb = $("resetBtn"); if (rb) rb.onclick = async () => { if (await UI.ask("مسح كل التعديلات والطلبات التجريبية؟")) { await Store.resetDemo(); await refresh(); toast("تم"); } };
   }
   document.addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx],[data-sf],[data-smv],[data-shist],[data-asub],[data-buy],[data-stockpick],[data-newsup],[data-supedit],[data-suppay],[data-supstmt],[data-supbuy],[data-newcust],[data-cpay],[data-csell],[data-cstmt],[data-cedit],[data-cpnew],[data-cpedit],[data-cptog],[data-cpshare],[data-dmove],[data-dmlog],[data-fees],[data-plist],[data-dmdel]"); if (!el || !A.me) return;
+    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx],[data-sf],[data-smv],[data-shist],[data-asub],[data-buy],[data-stockpick],[data-newsup],[data-supedit],[data-suppay],[data-supstmt],[data-supbuy],[data-newcust],[data-cpay],[data-csell],[data-cstmt],[data-cedit],[data-cpnew],[data-cpedit],[data-cptog],[data-cpshare],[data-dmove],[data-dmlog],[data-fees],[data-plist],[data-csub],[data-gocollect],[data-cday],[data-dclose],[data-carch],[data-cmeta],[data-dsettle],[data-cexport],[data-printrec],[data-pstmt],[data-osplit],[data-dmdel]"); if (!el || !A.me) return;
     const d = el.dataset;
     try {
       if (d.tab) { A.tab = d.tab; render(); scrollTo(0, 0); }
@@ -797,7 +1059,7 @@
       else if (d.cedit) custSheet(d.cedit);
       else if (d.cstmt) custStmt(d.cstmt);
       else if (d.csell) { const c = custList().find((x) => x.phone === d.csell) || {}; txSheet("sale", { phone: d.csell, name: c.name }); setTimeout(() => { const tp2 = $("tPay"); if (tp2) tp2.value = "credit"; }, 0); }
-      else if (d.cpay) { const c = custList().find((x) => x.phone === d.cpay); closeSheet(); txSheet("receivable_paid", { amount: Math.max(0, c.bal), phone: c.phone, name: c.name }); }
+      else if (d.cpay) { closeSheet(); paySheet(d.cpay); }
       else if (d.suppay) supPaySheet(d.suppay);
       else if (d.supstmt) supStmt(d.supstmt);
       else if (d.supbuy) txSheet("purchase", { supplier: d.supbuy });
@@ -821,6 +1083,17 @@
         A.bulk = false; toast(`تم تحديث ${n} سعر ✓`); await refresh();
       }
       else if (d.quick) { const [id, st] = d.quick.split(":"); await Store.updateOrder(id, { status: st }); toast("تم ✓"); await refresh(); }
+      else if (d.gocollect !== undefined) { A.tab = "accounts"; A.asub = "collect"; A.csub = "late"; render(); scrollTo(0, 0); }
+      else if (d.csub) { A.csub = d.csub; render(); }
+      else if (d.cday) { A.cday = d.cday; render(); }
+      else if (d.dclose) closeSheet2(d.dclose);
+      else if (d.carch !== undefined) { A.carch = !A.carch; render(); }
+      else if (d.cmeta) { closeSheet(); metaSheet(d.cmeta); }
+      else if (d.dsettle) settleSheet(d.dsettle);
+      else if (d.cexport !== undefined) exportCollect();
+      else if (d.printrec) { const r = JSON.parse(d.printrec); printDoc("سند قبض " + (r.n || ""), `<pre>${esc(r.txt)}</pre>`); }
+      else if (d.pstmt) printStmt(d.pstmt);
+      else if (d.osplit) splitSheet(d.osplit);
       else if (d.fees !== undefined) feesSheet();
       else if (d.plist !== undefined) plistSheet();
       else if (d.dmove) { const [id, k] = d.dmove.split(":"); dMoveSheet(id, k); }
@@ -864,7 +1137,7 @@
   document.addEventListener("change", async (e) => {
     const el = e.target, d = el.dataset; if (!A.me) return;
     try {
-      if (d.opay) { await Store.updateOrder(d.opay, { payment: el.value }); toast("تم تحديث طريقة الدفع ✓"); await refresh(); }
+      if (d.opay) { const oo = A.orders.find((x) => x.id === d.opay); if (el.value === "credit" && oo && oo.payment !== "credit" && !(await limitOk(oo.phone, oo.total))) { el.value = oo.payment || "cash"; return; } await Store.updateOrder(d.opay, { payment: el.value, pay_split: null }); toast("تم تحديث طريقة الدفع ✓"); await refresh(); }
       else if (d.ostatus) { await Store.updateOrder(d.ostatus, { status: el.value }); toast("تم تحديث الحالة ✓"); await refresh(); }
       else if (d.odriver !== undefined && d.odriver) { const o = A.orders.find((x) => x.id === d.odriver); const patch = { driver_id: el.value || null }; if (el.value && ["new", "confirmed"].includes(o.status)) patch.status = "preparing"; await Store.updateOrder(d.odriver, patch); toast("تم تعيين المندوب ✓"); await refresh(); }
       else if (d.stock) { const p = A.products.find((x) => x.id === d.stock); await Store.saveProduct({ ...p, in_stock: el.checked }); toast(el.checked ? "متوفر ✓" : "تم إخفاؤه كغير متوفر"); await refresh(); }
@@ -877,8 +1150,8 @@
     try {
       const me = await Store.me();
       if (!me) return loginView();
-      if (me.role !== "admin") return loginView(Store.live ? `حسابك (${esc(me.email || me.full_name || "")}) مش أدمن لسه. فعّله من Supabase بالأمر الموجود في الدليل، أو اطلب من أدمن آخر.` : "");
-      A.me = me; await loadAll(); render();
+      if (me.role !== "admin" && me.role !== "accountant") return loginView(Store.live ? `حسابك (${esc(me.email || me.full_name || "")}) مش أدمن لسه. فعّله من Supabase بالأمر الموجود في الدليل، أو اطلب من أدمن آخر.` : "");
+      A.me = me; if (me.role === "accountant") { A.tab = "accounts"; A.asub = "collect"; } await loadAll(); render();
     } catch (e) { toast(e.message, "err"); loginView(); }
   }
   (async () => { try { await Store.init(); } catch (e) { $("app").innerHTML = `<div class="empty">⚠️ ${esc(e.message)}</div>`; return; } await boot(); Store._onRecovery = () => UI.recover(() => boot()); if (Store.recovery) Store._onRecovery(); Store.onChange(() => { if (A.me) refresh(true).catch(() => {}); }); })();

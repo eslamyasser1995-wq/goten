@@ -18,6 +18,18 @@
       $("upBtn").onclick = async () => { const ph = $("np").value.replace(/\D/g, ""); if (!$("nn").value.trim() || ph.length !== 8) return toast("اكتب الاسم ورقم من 8 أرقام", "err"); try { await Store.signUp($("em").value.trim(), $("pw").value, $("nn").value.trim(), "965" + ph); toast("تم التسجيل – انتظر موافقة الإدارة"); } catch (e) { toast(e.message, "err"); } };
     }
   }
+  // ---------- مصاريف المندوب ----------
+  function expSheet() {
+    UI.sheet(`<h3>⛽ مصروف جديد</h3><p class="mut">المصروف بيتخصم من الكاش اللي معاك للمحل.</p>
+      <div class="chips" id="exC">${["⛽ بنزين", "🛍️ أكياس", "🧊 ثلج", "🅿️ باركينج", "📦 أخرى"].map((c, i) => `<button class="chip ${i ? "" : "on"}" data-exc="${c}">${c}</button>`).join("")}</div>
+      <label class="f"><span>المبلغ (د.ك)</span><input class="in" id="exA" type="number" step="0.005" min="0" max="100" inputmode="decimal"></label>
+      <label class="f"><span>ملاحظة (اختياري)</span><input class="in" id="exN"></label><button class="btn tq block" id="exS">💾 حفظ</button>`, () => {
+      let cat = "⛽ بنزين";
+      $("exC").onclick = (e) => { const b = e.target.closest("[data-exc]"); if (!b) return; cat = b.dataset.exc; document.querySelectorAll("#exC .chip").forEach((x) => x.classList.toggle("on", x === b)); };
+      $("exS").onclick = async () => { const a = num($("exA").value); if (!(a > 0) || a > 100) return toast("اكتب مبلغ صحيح (لحد 100 د.ك)", "err"); $("exS").disabled = true;
+        try { await Store.addDriverMove({ driver_id: D.me.id, kind: "expense", amount: a, category: cat, note: $("exN").value.trim() }); UI.closeSheet(); toast("اتسجّل ✓"); await refresh(); } catch (e) { $("exS").disabled = false; toast(e.message, "err"); } };
+    });
+  }
   // ---------- صورة التسليم ----------
   function proofSheet(id) {
     const o = D.orders.find((x) => x.id === id); if (!o) return;
@@ -48,6 +60,8 @@
   document.addEventListener("click", async (e) => {
     unlockAudio(); if (alarmT && e.target.closest("#ackBtn,[data-tab],.ord")) { alarm(false); }
     if (e.target.closest("[data-proof]")) return proofSheet(e.target.closest("[data-proof]").dataset.proof);
+    if (e.target.closest("[data-dexp]")) return expSheet();
+    const dx = e.target.closest("[data-dexpdel]"); if (dx) { if (!(await UI.ask("تمسح المصروف ده؟"))) return; try { await Store.deleteDriverMove(dx.dataset.dexpdel); toast("اتمسح"); await refresh(); } catch (err) { toast(err.message, "err"); } return; }
     const el = e.target.closest("[data-demo],[data-go],[data-tab]"); if (!el) return;
     if (el.dataset.demo) { const p = (await Store.profiles()).find((x) => x.id === el.dataset.demo); Store.demoLogin({ id: p.id, role: "driver", full_name: p.full_name, phone: p.phone }); boot(); }
     else if (el.dataset.tab) { D.tab = el.dataset.tab; render(); }
@@ -90,10 +104,11 @@
     const del = D.orders.filter((o) => o.status === "delivered"), at = (o) => new Date(o.delivered_at || o.updated_at || o.created_at);
     const since = (days) => del.filter((o) => Date.now() - at(o) < days * 864e5), earn = (a) => a.reduce((x, o) => x + num(o.driver_earning), 0);
     const today = del.filter((o) => at(o).toDateString() === new Date().toDateString());
-    const cashOf = (a) => a.filter((o) => (o.payment || "cash") === "cash").reduce((x, o) => x + num(o.total), 0);
-    const hand = D.moves.filter((m) => m.kind === "handover").reduce((x, m) => x + num(m.amount), 0), paid = D.moves.filter((m) => m.kind === "payout").reduce((x, m) => x + num(m.amount), 0);
+    const cashOne = (o) => o.pay_split ? num(o.pay_split.cash) : (o.payment || "cash") === "cash" ? num(o.total) : 0;
+    const cashOf = (a) => a.reduce((x, o) => x + cashOne(o), 0), mv = (k) => D.moves.filter((m) => m.kind === k).reduce((x, m) => x + num(m.amount), 0);
+    const hand = mv("handover") + mv("expense") - mv("collect"), paid = mv("payout"), comm = mv("commission"), exp = mv("expense"), coll = mv("collect");
     const days = [...Array(7)].map((_, i) => { const t = new Date(); t.setHours(0, 0, 0, 0); t.setDate(t.getDate() - (6 - i)); const ds = del.filter((o) => at(o).toDateString() === t.toDateString()); return { lbl: t.toLocaleDateString("ar-KW", { weekday: "short" }), n: ds.length }; });
-    return { today, w: since(7), m: since(30), earn, cashAll: cashOf(del), cashToday: cashOf(today), hand, paid, totalEarn: earn(del), del, days };
+    return { today, w: since(7), m: since(30), earn, cashAll: cashOf(del), cashToday: cashOf(today), hand, paid, comm, exp, coll, handOnly: mv("handover"), totalEarn: earn(del) + comm, del, days };
   }
   function walletView() {
     const W = wallet(), cashWith = W.cashAll - W.hand, due = W.totalEarn - W.paid, mx = Math.max(1, ...W.days.map((d) => d.n));
@@ -101,15 +116,18 @@
     return `<div class="stats" style="margin-top:12px">${st(`النهارده (${W.today.length} توصيلة)`, money(W.earn(W.today)), "#16a34a")}${st(`آخر 7 أيام (${W.w.length})`, money(W.earn(W.w)))}${st(`آخر 30 يوم (${W.m.length})`, money(W.earn(W.m)))}${st("كل التوصيلات", W.del.length)}</div>
       <div class="card"><b>📊 توصيلاتك آخر 7 أيام</b><div style="display:flex;align-items:flex-end;gap:6px;height:110px;margin-top:10px">${W.days.map((d) => `<div style="flex:1;text-align:center;font-size:11px"><div class="mut">${d.n || ""}</div><div style="height:${Math.round((d.n / mx) * 70) + 2}px;background:var(--tq);border-radius:6px 6px 0 0"></div><div class="mut">${d.lbl}</div></div>`).join("")}</div></div>
       <div class="card"><b>💵 الكاش اللي معاك للمحل</b>
-        <div class="line"><span>حصّلته من الزباين</span><b>${money(W.cashAll)}</b></div>
-        <div class="line"><span>− سلّمته للمحل</span><b>${money(W.hand)}</b></div>
+        <div class="line"><span>حصّلته من الطلبات</span><b>${money(W.cashAll)}</b></div>
+        ${W.coll ? `<div class="line"><span>+ حصّلته من آجل الزباين</span><b>${money(W.coll)}</b></div>` : ""}
+        <div class="line"><span>− سلّمته للمحل</span><b>${money(W.handOnly)}</b></div>
+        <div class="line"><span>− مصاريفك (بنزين وغيره)</span><b>${money(W.exp)}</b></div>
         <div class="line total"><span>${cashWith >= 0 ? "معاك للمحل" : "المحل مديون لك"}</span><span style="color:${cashWith > 0.0005 ? "#b45309" : "#16a34a"}">${money(Math.abs(cashWith))}</span></div></div>
       <div class="card"><b>💰 أرباحك</b>
-        <div class="line"><span>أرباحك من ${W.del.length} توصيلة</span><b>${money(W.totalEarn)}</b></div>
+        <div class="line"><span>أرباحك من ${W.del.length} توصيلة</span><b>${money(W.totalEarn - W.comm)}</b></div>${W.comm ? `<div class="line"><span>+ عمولة تحصيل</span><b>${money(W.comm)}</b></div>` : ""}
         <div class="line"><span>− اتصرفلك</span><b>${money(W.paid)}</b></div>
         <div class="line total"><span>ليك عند المحل</span><span style="color:#16a34a">${money(Math.max(0, due))}</span></div>
         <p class="mut" style="margin:6px 0 0">لو عايز تخصم أرباحك من الكاش اللي معاك، الصافي ${cashWith - due >= 0 ? `تسلّم للمحل <b>${money(cashWith - due)}</b>` : `المحل يدفعلك <b>${money(due - cashWith)}</b>`}.</p></div>
-      <div class="card"><b>آخر الحركات</b>${D.moves.slice(0, 15).map((m) => `<div class="line"><span>${m.kind === "payout" ? "💸 اتصرفلك" : "💵 سلّمت"} ${fmtDate(m.created_at)}${m.note ? " – " + esc(m.note) : ""}</span><b>${money(m.amount)}</b></div>`).join("") || '<p class="mut">لسه مفيش حركات.</p>'}</div>`;
+      <button class="btn block" style="background:#f59e0b;color:#fff" data-dexp>⛽ سجّل مصروف (بنزين، أكياس، ثلج...)</button>
+      <div class="card"><b>آخر الحركات</b>${D.moves.slice(0, 20).map((m) => `<div class="line"><span>${({ payout: "💸 اتصرفلك", handover: "💵 سلّمت", expense: "⛽ مصروف", collect: "🧾 حصّلت آجل", commission: "🎁 عمولة" })[m.kind] || m.kind}${m.category ? " " + esc(m.category) : ""} ${fmtDate(m.created_at)}${m.note ? " – " + esc(m.note) : ""}</span><span><b>${money(m.amount)}</b>${m.kind === "expense" && Date.now() - new Date(m.created_at) < 864e5 ? ` <button class="btn sm ghost" data-dexpdel="${m.id}">🗑️</button>` : ""}</span></div>`).join("") || '<p class="mut">لسه مفيش حركات.</p>'}</div>`;
   }
   function render() {
     const isToday = (d) => new Date(d).toDateString() === new Date().toDateString();
