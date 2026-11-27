@@ -516,7 +516,7 @@
   }
   function moneyPage() {
     const v = A.msub || "main";
-    const top = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0"><button class="btn sm" style="background:#15803d" data-xlsx>📗 ملف Excel كامل</button><button class="btn sm ghost" data-backup>💾 نسخة احتياطية</button></div>`;
+    const top = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0"><button class="btn sm" style="background:#15803d" data-xlsx>📗 ملف Excel كامل</button><button class="btn sm ghost" data-backup>💾 نسخة احتياطية</button>${A.me.role === "admin" ? `<button class="btn sm ghost" data-impx>📤 ملف للتعديل</button><button class="btn sm" style="background:#7c3aed" data-impin>📥 استيراد Excel</button><button class="btn sm ghost" data-imph>↩️ سجل الاستيراد</button>` : ""}</div>`;
     return mTabs() + top + (v === "profit" ? profitPage() : v === "month" ? monthPage() : v === "inc" ? incPage() : v === "exp" ? expPage() : v === "pay" || v === "fixed" ? ((A.msub = "exp"), (A.esub = v), expPage()) : v === "boxes" ? boxesPage() : v === "plan" ? planPage() : v === "partners" ? partnersPage() : accountsMoney());
   }
   // ---- 🐟 ربح كل صنف ----
@@ -747,6 +747,131 @@
     if (A.me.role === "admin" && (A.alog || []).length) add("سجل التعديلات", [["الوقت", "مين", "العملية", "الجدول", "قبل", "بعد", "الطرف", "ملاحظة"], ...A.alog.map((r) => [new Date(r.at).toLocaleString("ar-KW"), r.actor_name || "", r.action, r.tbl, r.amount_old != null ? n3(r.amount_old) : "", r.amount_new != null ? n3(r.amount_new) : "", (r.info || {}).party || "", (r.info || {}).note || ""])]);
     XLSX.writeFile(wb, `Goten-${all ? "backup" : "accounts"}-${dayKey(new Date())}.xlsx`);
     toast("✅ الملف اتنزّل");
+  }
+  // =================== 📥 استيراد Excel (يصحّح الحسابات) + تراجع ===================
+  const YN = (v) => (v === true ? "أيوه" : v === false ? "لأ" : "");
+  const isYes = (v) => /^(أيوه|ايوه|نعم|yes|true|1|✓)$/i.test(String(v == null ? "" : v).trim());
+  const clean = (s) => String(s == null ? "" : s).replace(/^\S*[\u{1F300}-\u{1FAFF}☀-➿]\S*\s+/u, "").trim();
+  const labelOf = (map, k) => clean(map[k] || k || "");
+  const keyOf = (map, v) => { const s = String(v == null ? "" : v).trim(); if (!s) return null; if (map[s] !== undefined) return s; const f = Object.keys(map).find((k) => clean(map[k]) === s || map[k] === s); return f || undefined; };
+  const DMK = { handover: "سلّم كاش", payout: "صرف أرباح", expense: "مصروف", collect: "حصّل آجل", commission: "عمولة" };
+  const METH = { cash: "كاش", knet: "كي نت" };
+  function toDay(v) {
+    if (v == null || v === "") return null;
+    if (v instanceof Date && !isNaN(v)) return dayKey(v);
+    if (typeof v === "number" && v > 20000 && v < 80000) return dayKey(new Date(Math.round((v - 25569) * 86400000) + 12 * 3600000));
+    const s = String(v).trim().replace(/\//g, "-"); let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+    m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})/); if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+    return undefined;
+  }
+  const nOrNull = (v) => (v === "" || v == null ? null : isNaN(Number(String(v).replace(/,/g, ""))) ? undefined : Number(String(v).replace(/,/g, "")));
+  const sOrNull = (v) => (v === "" || v == null ? null : String(v).trim() || null);
+  const iOrNull = (v) => { const n = nOrNull(v); return n == null ? n : Math.round(n); };
+  // تعريف كل شيت: اسمه، الجدول، المفتاح، والأعمدة [العنوان، الحقل، من الداتا للشيت، من الشيت للداتا]
+  function impDefs() {
+    const pn = (id) => (A.profiles.find((p) => p.id === id) || {}).full_name || "";
+    const drvId = (v) => { const s = String(v || "").trim(); if (!s) return undefined; const p = A.profiles.find((x) => x.id === s || (x.full_name || "").trim() === s); return p ? p.id : undefined; };
+    const supN = (id) => ((A.sups || []).find((x) => x.id === id) || {}).name || "";
+    const supId = (v) => { const s = String(v || "").trim(); if (!s) return null; const x = (A.sups || []).find((y) => y.id === s || y.name.trim() === s); return x ? x.id : undefined; };
+    const empN = (id) => ((A.emps || []).find((x) => x.id === id) || {}).name || "";
+    const empId = (v) => { const s = String(v || "").trim(); if (!s) return null; const x = (A.emps || []).find((y) => y.id === s || y.name.trim() === s); return x ? x.id : undefined; };
+    const box = [ "الخزنة", "box", (r) => labelOf(BOX, r.box || "drawer"), (v) => keyOf(BOX, v) || (String(v || "").trim() ? undefined : "drawer")];
+    return [
+      { sh: "الموردين", t: "suppliers", k: "id", rows: () => A.sups || [], cols: [["الاسم", "name", (r) => r.name, sOrNull, 1], ["الهاتف", "phone", (r) => r.phone || "", sOrNull], ["رصيد سابق", "opening_balance", (r) => num(r.opening_balance), (v) => nOrNull(v) ?? 0], ["يوم الدفع", "pay_day", (r) => r.pay_day || "", iOrNull], ["مدة السداد (يوم)", "terms_days", (r) => r.terms_days || "", iOrNull], ["ملاحظة", "note", (r) => r.note || "", sOrNull]] },
+      { sh: "الموظفين", t: "employees", k: "id", rows: () => A.emps || [], cols: [["الاسم", "name", (r) => r.name, sOrNull, 1], ["الوظيفة", "role", (r) => r.role || "", sOrNull], ["الهاتف", "phone", (r) => r.phone || "", sOrNull], ["الراتب", "salary", (r) => num(r.salary), (v) => nOrNull(v) ?? 0], ["يوم القبض", "pay_day", (r) => r.pay_day || 1, (v) => iOrNull(v) ?? 1], ["شغّال", "active", (r) => YN(r.active !== false), (v) => (String(v || "").trim() ? isYes(v) : true)]] },
+      { sh: "مصاريف ثابتة", t: "recurring", k: "id", rows: () => A.recs || [], cols: [["الاسم", "name", (r) => r.name, sOrNull, 1], ["النوع", "category", (r) => r.category || "", sOrNull], ["المبلغ", "amount", (r) => num(r.amount), nOrNull, 1], ["اليوم (1-28)", "day", (r) => r.day || 1, (v) => iOrNull(v) ?? 1], box, ["شغّال", "active", (r) => YN(r.active !== false), (v) => (String(v || "").trim() ? isYes(v) : true)]] },
+      { sh: "العملاء", t: "customers", k: "phone", rows: () => A.imported || [], cols: [["الاسم", "name", (r) => r.name || "", sOrNull], ["المنطقة", "area", (r) => r.area || "", sOrNull]] },
+      { sh: "حدود العملاء", t: "customer_meta", k: "phone", rows: () => A.cmeta || [], cols: [["حد الآجل", "credit_limit", (r) => (r.credit_limit != null ? num(r.credit_limit) : ""), nOrNull], ["مدة السداد (يوم)", "terms_days", (r) => r.terms_days || "", iOrNull], ["مؤرشف", "archived", (r) => YN(!!r.archived), isYes], ["ملاحظة", "note", (r) => r.note || "", sOrNull]] },
+      { sh: "الحركات", t: "transactions", k: "id", rows: () => A.tx, cols: [["التاريخ", "date", (r) => r.date || dayKey(r.created_at), (v) => toDay(v) ?? dayKey(new Date()), 0, "date"], ["النوع", "kind", (r) => labelOf(KINDS, r.kind), (v) => keyOf(KINDS, v), 1], ["البيان / التصنيف", "category", (r) => r.category || "", sOrNull], ["الطرف", "party_name", (r) => r.party_name || "", sOrNull], ["هاتف الطرف", "party", (r) => r.party || "", sOrNull], ["المبلغ", "amount", (r) => num(r.amount), nOrNull, 1], box, ["الطريقة", "method", (r) => labelOf(METH, r.method) || "", (v) => (String(v || "").trim() ? keyOf(METH, v) : null)], ["المورد", "supplier_id", (r) => supN(r.supplier_id), supId], ["الموظف", "employee_id", (r) => empN(r.employee_id), empId], ["رقم السند", "receipt_no", (r) => r.receipt_no || "", iOrNull], ["ملاحظة", "note", (r) => r.note || "", sOrNull]] },
+      { sh: "حركات المناديب", t: "driver_moves", k: "id", rows: () => A.dmoves || [], cols: [["التاريخ", "created_at", (r) => dayKey(r.created_at), (v) => toDay(v), 1, "ts"], ["المندوب", "driver_id", (r) => pn(r.driver_id), drvId, 1], ["الحركة", "kind", (r) => DMK[r.kind] || r.kind, (v) => keyOf(DMK, v), 1], ["المبلغ", "amount", (r) => num(r.amount), nOrNull, 1], ["النوع", "category", (r) => r.category || "", sOrNull], ["ملاحظة", "note", (r) => r.note || "", sOrNull]] },
+      { sh: "إقفال الأيام", t: "day_closes", k: "day", rows: () => A.dcloses || [], cols: [["المفروض كاش", "expected_cash", (r) => num(r.expected_cash), nOrNull], ["اتعدّ", "counted_cash", (r) => num(r.counted_cash), nOrNull], ["كي نت مفروض", "expected_knet", (r) => num(r.expected_knet), nOrNull], ["كي نت البنك", "bank_knet", (r) => (r.bank_knet != null ? num(r.bank_knet) : ""), nOrNull], ["ملاحظة", "note", (r) => r.note || "", sOrNull]] }
+    ];
+  }
+  const KEYH = { id: "🔒 رقم داخلي (سيبه زي ما هو – فاضي للجديد)", phone: "الهاتف (مفتاح)", day: "اليوم (مفتاح)" };
+  async function exportEditable() {
+    toast("⏳ بجهّز ملف التعديل…"); try { await loadXLSX(); } catch (e) { return toast(e.message, "err"); }
+    const wb = XLSX.utils.book_new();
+    const help = [["📥 ملف الحسابات للتعديل – Goten"], [], ["1) عدّل الأرقام الغلط أو ضيف سطور جديدة أو امسح سطور."], ["2) السطر الجديد: سيب عمود «رقم داخلي» فاضي."], ["3) متغيّرش أسماء الشيتات ولا العناوين في أول سطر."], ["4) الشيت اللي تمسحه من الملف مش هيتلمس. لكن جوّه أي شيت، السطر اللي تمسحه هيتمسح من التطبيق."], ["5) ارفع الملف من «📥 استيراد Excel»، وهيوريك قبل ما يحفظ هيضيف/يعدّل/يمسح كام."], ["6) لو حاجة طلعت غلط: «↩️ سجل الاستيراد» ← تراجع، وكل حاجة ترجع زي ما كانت."], [], ["الأنواع المتاحة في الحركات:", Object.values(KINDS).map(clean).join(" / ")], ["الخزنة:", Object.values(BOX).map(clean).join(" / ")], ["حركات المناديب:", Object.values(DMK).join(" / ")], ["التواريخ:", "بالشكل 2026-11-27"], [], ["اتعمل:", new Date().toLocaleString("ar-KW")]];
+    const addS = (name, rows) => { const ws = XLSX.utils.aoa_to_sheet(rows); ws["!cols"] = (rows[0] || []).map((_, i) => ({ wch: Math.min(45, Math.max(12, ...rows.slice(0, 200).map((r) => String(r[i] == null ? "" : r[i]).length + 2))) })); ws["!views"] = [{ RTL: true }]; XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31)); };
+    addS("اقرأني", help);
+    for (const D of impDefs()) {
+      const head = [KEYH[D.k], ...D.cols.map((c) => c[0])];
+      const keyVal = (r) => (D.k === "day" ? r.day : D.k === "phone" ? r.phone : r.id);
+      addS(D.sh, [head, ...D.rows().map((r) => [keyVal(r), ...D.cols.map((c) => c[2](r))])]);
+    }
+    XLSX.writeFile(wb, `Goten-تعديل-الحسابات-${dayKey(new Date())}.xlsx`); toast("✅ الملف اتنزّل – عدّله وارفعه");
+  }
+  function same(a, b) { const n = (v) => (v === undefined || v === "" ? null : typeof v === "number" ? Math.round(v * 1000) / 1000 : v); const x = n(a), y = n(b); if (x == null && y == null) return true; if (typeof x === "number" || typeof y === "number") return Number(x) === Number(y); return String(x) === String(y); }
+  async function importXlsx(file) {
+    toast("⏳ بقرا الملف…"); try { await loadXLSX(); } catch (e) { return toast(e.message, "err"); }
+    let wb; try { wb = XLSX.read(await file.arrayBuffer(), { cellDates: true }); } catch (e) { return toast("الملف ده مش Excel سليم", "err"); }
+    const P = {}, plan = [], errs = [], uidG = () => (crypto.randomUUID ? crypto.randomUUID() : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (c ^ (Math.random() * 16) >> (c / 4)).toString(16)));
+    for (const D of impDefs()) {
+      const ws = wb.Sheets[D.sh]; if (!ws) continue;
+      const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: true });
+      const head = (aoa[0] || []).map((h) => String(h).trim());
+      const ix = (h) => head.indexOf(h), kI = head.findIndex((h) => h === KEYH[D.k] || h.startsWith("🔒") || h.startsWith("الهاتف") || h.startsWith("اليوم (مفتاح"));
+      if (kI < 0) { errs.push(`شيت «${D.sh}»: عمود المفتاح مش موجود في أول سطر`); continue; }
+      const old = new Map(D.rows().map((r) => [String(r[D.k]), r])), out = [], seen = new Set(); let add = 0, edit = 0;
+      aoa.slice(1).forEach((row, ri) => {
+        if (!row.some((v) => String(v).trim() !== "")) return;
+        const at = `«${D.sh}» سطر ${ri + 2}`;
+        let key = row[kI];
+        if (D.k === "day") { key = toDay(key); if (!key) return errs.push(`${at}: اليوم مش مكتوب صح`); }
+        else if (D.k === "phone") { key = normPh(String(key)); if (!key || key.length < 8) return errs.push(`${at}: رقم الهاتف غلط`); }
+        else key = String(key || "").trim();
+        if (D.k === "id" && key && !old.has(key)) return errs.push(`${at}: «رقم داخلي» مش موجود – امسحه لو السطر جديد`);
+        if (key && seen.has(key)) return errs.push(`${at}: السطر ده متكرر`);
+        const base = (key && old.get(key)) || null, rec = base ? { ...base } : {};
+        let changed = !base;
+        for (const c of D.cols) {
+          const i = ix(c[0]); if (i < 0) continue;
+          const v = c[3](row[i]);
+          if (v === undefined || (c[4] && (v == null || v === ""))) { errs.push(`${at}: «${c[0]}» قيمته غلط أو فاضية (${String(row[i]).slice(0, 25) || "فاضي"})`); continue; }
+          if (c[5] === "ts") { if (base && dayKey(base.created_at) === v) continue; rec[c[1]] = v + "T12:00:00+03:00"; changed = true; continue; }
+          if (!same(rec[c[1]], v)) { rec[c[1]] = v; if (base) changed = true; }
+        }
+        if (D.t === "transactions" && num(rec.amount) < 0) errs.push(`${at}: المبلغ لازم يبقى موجب`);
+        if ((D.t === "driver_moves" || D.t === "recurring") && !(num(rec.amount) > 0)) errs.push(`${at}: المبلغ لازم يبقى أكبر من صفر`);
+        if (D.t === "recurring" && (rec.day < 1 || rec.day > 28)) errs.push(`${at}: اليوم لازم من 1 لـ 28`);
+        if (!key) { key = uidG(); rec.created_at = rec.created_at || new Date().toISOString(); }
+        rec[D.k] = key; if (D.t === "customers" && !base) rec.source = "import";
+        seen.add(key); out.push(rec); if (!base) add++; else if (changed) edit++;
+      });
+      const del = [...old.keys()].filter((k) => !seen.has(k)).length;
+      P[D.t] = out; plan.push({ sh: D.sh, add, edit, del, total: out.length });
+    }
+    if (!plan.length && !errs.length) return toast("مفيش ولا شيت من شيتات الحسابات في الملف – نزّل «ملف للتعديل» الأول", "err");
+    const tbl = `<table style="width:100%;border-collapse:collapse;font-size:13px"><tr><th style="text-align:right">الشيت</th><th>➕ جديد</th><th>✏️ تعديل</th><th>🗑️ مسح</th></tr>${plan.map((p) => `<tr style="border-top:1px solid #eee"><td>${esc(p.sh)}</td><td style="text-align:center">${p.add}</td><td style="text-align:center">${p.edit}</td><td style="text-align:center;${p.del ? "color:#dc2626;font-weight:700" : ""}">${p.del}</td></tr>`).join("")}</table>`;
+    const nothing = plan.every((p) => !p.add && !p.edit && !p.del);
+    sheet(`<div class="h2">📥 مراجعة الاستيراد</div><p class="mut" style="font-size:12px">${esc(file.name)}</p>${tbl}
+      ${errs.length ? `<div class="notice" style="background:#fef2f2;color:#991b1b;margin-top:10px"><b>لازم تصلّح دول الأول (${errs.length}):</b><div style="max-height:200px;overflow:auto;font-size:12px">${errs.slice(0, 60).map((e) => "• " + esc(e)).join("<br>")}</div></div>` : nothing ? `<p class="notice" style="margin-top:10px">الملف مطابق للتطبيق – مفيش حاجة تتغير.</p>` : `<p class="mut" style="font-size:12px;margin-top:10px">هاخد نسخة من البيانات الحالية قبل ما أحفظ، وتقدر تتراجع في أي وقت من «↩️ سجل الاستيراد».</p><button class="btn" id="impGo" style="width:100%;margin-top:6px">✅ طبّق التعديلات</button>`}`, () => {
+      const b = $("impGo"); if (!b) return;
+      b.onclick = async () => {
+        const dels = plan.reduce((a, p) => a + p.del, 0);
+        if (dels && !(await UI.ask(`هيتمسح ${dels} سطر من التطبيق لأنهم مش موجودين في الملف. تكمّل؟`))) return;
+        b.disabled = true; b.textContent = "⏳ بحفظ…";
+        try { await Store.importAccounts(P, file.name); closeSheet(); toast("✅ الحسابات اتصححت من الملف"); await loadAll(); render(); }
+        catch (e) { b.disabled = false; b.textContent = "✅ طبّق التعديلات"; toast("❌ " + (e.message || e), "err"); }
+      };
+    });
+  }
+  function importPick() {
+    if (A.me.role !== "admin") return toast("الأدمن بس اللي يقدر يستورد", "err");
+    const f = document.createElement("input"); f.type = "file"; f.accept = ".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel";
+    f.onchange = () => { if (f.files[0]) importXlsx(f.files[0]); }; f.click();
+  }
+  async function importHistory() {
+    let L = []; try { L = (await Store.importList()) || []; } catch (e) { return toast(e.message, "err"); }
+    const firstOpen = (L.find((x) => !x.undone_at) || {}).id;
+    const sumTxt = (s) => Object.entries(s || {}).map(([t, v]) => `${(impDefs().find((d) => d.t === t) || {}).sh || t}: ${v.saved} سطر${v.deleted ? ` · اتمسح ${v.deleted}` : ""}`).join(" – ");
+    sheet(`<div class="h2">↩️ سجل الاستيراد</div>${L.length ? `<div class="list">${L.map((x) => `<div class="it"><div class="t"><b>${esc(x.file || "ملف")}</b><span class="mut">${new Date(x.at).toLocaleString("ar-KW")}${x.by ? " · " + esc(x.by) : ""}</span><span class="mut" style="font-size:11px">${esc(sumTxt(x.summary))}</span></div>${x.undone_at ? `<span class="mut" style="font-size:12px">اتلغى ✓</span>` : x.id === firstOpen ? `<button class="btn sm" style="background:#dc2626" data-undo="${x.id}">تراجع</button>` : `<span class="mut" style="font-size:11px">ألغي اللي بعده الأول</span>`}</div>`).join("")}</div>` : `<p class="mut">لسه مفيش استيراد.</p>`}`, (w) => {
+      w.querySelectorAll("[data-undo]").forEach((b) => (b.onclick = async () => {
+        if (!(await UI.ask("ترجّع الحسابات زي ما كانت قبل الملف ده؟ (أي تعديل يدوي حصل بعد الاستيراد على نفس الشيتات هيضيع)"))) return;
+        b.disabled = true; b.textContent = "⏳";
+        try { await Store.undoImport(Number(b.dataset.undo)); closeSheet(); toast("✅ رجعت كل حاجة زي ما كانت"); await loadAll(); render(); } catch (e) { b.disabled = false; b.textContent = "تراجع"; toast("❌ " + e.message, "err"); }
+      }));
+    });
   }
   // =================== 📑 التقارير ===================
   const RK = { day: "📅 يومي", month: "🗓️ شهري", year: "📆 سنوي" };
@@ -1425,7 +1550,7 @@
     const rb = $("resetBtn"); if (rb) rb.onclick = async () => { if (await UI.ask("مسح كل التعديلات والطلبات التجريبية؟")) { await Store.resetDemo(); await refresh(); toast("تم"); } };
   }
   document.addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx],[data-sf],[data-smv],[data-shist],[data-asub],[data-buy],[data-stockpick],[data-newsup],[data-supedit],[data-suppay],[data-supstmt],[data-supbuy],[data-newcust],[data-cpay],[data-csell],[data-cstmt],[data-cedit],[data-cpnew],[data-cpedit],[data-cptog],[data-cpshare],[data-dmove],[data-dmlog],[data-fees],[data-plist],[data-csub],[data-gocollect],[data-msub],[data-addmenu],[data-esub],[data-isub],[data-rk],[data-rxlsx],[data-rprint],[data-gomsub],[data-xlsx],[data-backup],[data-emp],[data-esal],[data-eadv],[data-rec],[data-xfer],[data-boxopen],[data-partners],[data-draw],[data-oinv],[data-cday],[data-dclose],[data-carch],[data-cmeta],[data-dsettle],[data-cexport],[data-printrec],[data-pstmt],[data-osplit],[data-dmdel]"); if (!el || !A.me) return;
+    const el = e.target.closest("[data-impx],[data-impin],[data-imph],[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx],[data-sf],[data-smv],[data-shist],[data-asub],[data-buy],[data-stockpick],[data-newsup],[data-supedit],[data-suppay],[data-supstmt],[data-supbuy],[data-newcust],[data-cpay],[data-csell],[data-cstmt],[data-cedit],[data-cpnew],[data-cpedit],[data-cptog],[data-cpshare],[data-dmove],[data-dmlog],[data-fees],[data-plist],[data-csub],[data-gocollect],[data-msub],[data-addmenu],[data-esub],[data-isub],[data-rk],[data-rxlsx],[data-rprint],[data-gomsub],[data-xlsx],[data-backup],[data-emp],[data-esal],[data-eadv],[data-rec],[data-xfer],[data-boxopen],[data-partners],[data-draw],[data-oinv],[data-cday],[data-dclose],[data-carch],[data-cmeta],[data-dsettle],[data-cexport],[data-printrec],[data-pstmt],[data-osplit],[data-dmdel]"); if (!el || !A.me) return;
     const d = el.dataset;
     try {
       if (d.tab) { A.tab = d.tab; render(); scrollTo(0, 0); }
@@ -1474,6 +1599,9 @@
       else if (d.gomsub) { A.tab = "accounts"; A.asub = "money"; A.msub = d.gomsub; render(); scrollTo(0, 0); }
       else if (d.xlsx !== undefined) exportXlsx(false);
       else if (d.backup !== undefined) exportXlsx(true);
+      else if (d.impx !== undefined) exportEditable();
+      else if (d.impin !== undefined) importPick();
+      else if (d.imph !== undefined) importHistory();
       else if (d.emp) empSheet(d.emp === "new" ? null : d.emp);
       else if (d.esal) empPaySheet(d.esal, "salary");
       else if (d.eadv) empPaySheet(d.eadv, "advance");

@@ -358,6 +358,10 @@
       if (LIVE) return chk(await sb.from("suppliers").delete().eq("id", id));
       const d = db(); d.suppliers = (d.suppliers || []).filter((x) => x.id !== id); (d.transactions || []).forEach((t) => { if (t.supplier_id === id) t.supplier_id = null; }); persist();
     },
+    // 📥 استيراد Excel للحسابات + التراجع
+    async importAccounts(p, fname) { if (!LIVE) throw new Error("الاستيراد بيشتغل في النسخة الحقيقية بس"); return chk(await sb.rpc("import_accounts", { p, fname: fname || null })); },
+    async undoImport(bid) { if (!LIVE) throw new Error("النسخة الحقيقية بس"); return chk(await sb.rpc("undo_import", { bid })); },
+    async importList() { if (!LIVE) return []; return chk(await sb.rpc("import_list")); },
     async resetDemo() { if (!LIVE) { mem = seed(); persist(); } }
   };
   window.Store = Store;
