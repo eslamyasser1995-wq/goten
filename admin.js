@@ -468,7 +468,7 @@
     const purch = s("purchase"), exp = s("expense"), sal = s("salary") + s("advance"), inc = s("income"), draw = s("drawing");
     return { ords, tx, sales, cogs, waste, purch, exp, sal, inc, draw, profit: sales + inc - purch - exp - sal };
   }
-  const mSubs = [["main", "📒 الحركات"], ["profit", "🐟 ربح الأصناف"], ["month", "📈 الشهور"], ["inc", "💰 الإيرادات"], ["exp", "💸 المصاريف"], ["boxes", "🏦 الخزن"], ["plan", "🎯 الأهداف والميزانية"], ["partners", "🤝 الشركاء والسحب"]];
+  const mSubs = [["main", "📒 الحركات"], ["profit", "🐟 ربح الأصناف"], ["month", "📈 الشهور"], ["inc", "💰 الإيرادات"], ["exp", "💸 المصاريف"], ["boxes", "🏦 الخزن"], ["plan", "🎯 الأهداف والميزانية"], ["pricing", "🧮 أداة التسعير"], ["partners", "🤝 الشركاء والسحب"]];
   const mTabs = () => `<div class="filters" style="margin-top:6px">${mSubs.map(([k, l]) => `<button class="${(A.msub || "main") === k ? "on" : ""}" data-msub="${k}">${l}</button>`).join("")}</div>`;
   const perF = () => `<div class="filters">${PERIODS.map(([k, l]) => `<button class="${A.period === k ? "on" : ""}" data-period="${k}">${l}</button>`).join("")}</div>`;
   function addMenu() {
@@ -517,7 +517,7 @@
   function moneyPage() {
     const v = A.msub || "main";
     const top = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0"><button class="btn sm" style="background:#15803d" data-xlsx>📗 ملف Excel كامل</button><button class="btn sm ghost" data-backup>💾 نسخة احتياطية</button>${A.me.role === "admin" ? `<button class="btn sm ghost" data-impx>📤 ملف للتعديل</button><button class="btn sm" style="background:#7c3aed" data-impin>📥 استيراد Excel</button><button class="btn sm ghost" data-imph>↩️ سجل الاستيراد</button>` : ""}</div>`;
-    return mTabs() + top + (v === "profit" ? profitPage() : v === "month" ? monthPage() : v === "inc" ? incPage() : v === "exp" ? expPage() : v === "pay" || v === "fixed" ? ((A.msub = "exp"), (A.esub = v), expPage()) : v === "boxes" ? boxesPage() : v === "plan" ? planPage() : v === "partners" ? partnersPage() : accountsMoney());
+    return mTabs() + top + (v === "profit" ? profitPage() : v === "month" ? monthPage() : v === "inc" ? incPage() : v === "exp" ? expPage() : v === "pay" || v === "fixed" ? ((A.msub = "exp"), (A.esub = v), expPage()) : v === "boxes" ? boxesPage() : v === "plan" ? planPage() : v === "pricing" ? pricingPage() : v === "partners" ? partnersPage() : accountsMoney());
   }
   // ---- 🐟 ربح كل صنف ----
   function profitPage() {
@@ -748,6 +748,127 @@
     XLSX.writeFile(wb, `Goten-${all ? "backup" : "accounts"}-${dayKey(new Date())}.xlsx`);
     toast("✅ الملف اتنزّل");
   }
+  // =================== 🧮 أداة التسعير والتوقعات ===================
+  const PR_DEF = { days: 60, overhead: "", varOrder: 0.5, knet: 1, waste: 3, target: 900, orders: "", aov: "", margin: "", mkt: 0, ofCost: 6, ofPcs: 10, ofW: 0.35, ofExtra: 1, ofProfit: 5 };
+  const prGet = () => ({ ...PR_DEF, ...(A.settings.pricing || {}), ...(A.prLocal || {}) });
+  // البيانات الحقيقية من التطبيق للفترة
+  function prData(days) {
+    const now = Date.now(), D = 86400000, since = now - days * D, inW = (d) => d && new Date(d).getTime() >= since;
+    const del = A.orders.filter((o) => o.status === "delivered" && inW(o.delivered_at || o.created_at));
+    let rev = 0, cost = 0, revC = 0;
+    del.forEach((o) => (o.items || []).forEach((i) => { const p = A.products.find((q) => q.id === i.id), r = num(i.price) * num(i.qty); rev += r; if (p && p.cost != null) { cost += num(p.cost) * num(i.qty); revC += r; } }));
+    const tx = A.tx.filter((t) => inW(txD(t))), s = (k) => sum(tx.filter((t) => t.kind === k));
+    const months = days / 30.4;
+    const ohTx = (s("expense") + s("salary")) / months;
+    const ohFixed = sum((A.recs || []).filter((r) => r.active !== false)) + sum((A.emps || []).filter((e) => e.active !== false), (e) => e.salary);
+    const waste = (A.moves || []).filter((m) => m.kind === "waste" && inW(m.created_at)).reduce((a, m) => { const p = A.products.find((q) => q.id === m.product_id); return a + Math.abs(num(m.qty)) * num(m.cost != null ? m.cost : p && p.cost); }, 0);
+    const drv = sum(del, (o) => o.driver_earning);
+    // اتجاه الطلب: آخر 30 يوم مقابل الـ 30 اللي قبلها
+    const all = A.orders.filter((o) => o.status === "delivered"), cnt = (a, b) => all.filter((o) => { const t = new Date(o.delivered_at || o.created_at).getTime(); return t >= now - a * D && t < now - b * D; });
+    const l30 = cnt(30, 0), p30 = cnt(60, 30);
+    const growth = p30.length >= 5 ? Math.max(-0.5, Math.min(0.5, (l30.length - p30.length) / p30.length)) : null;
+    const phones = new Map(); all.forEach((o) => phones.set(o.phone, (phones.get(o.phone) || 0) + 1));
+    const repeat = phones.size ? [...phones.values()].filter((n) => n > 1).length / phones.size : null;
+    // أيام الأسبوع
+    const wd = [0, 0, 0, 0, 0, 0, 0]; del.forEach((o) => wd[new Date(o.delivered_at || o.created_at).getDay()]++);
+    return { n: del.length, rev, cost, revC, gm: revC ? (revC - cost) / revC : null, aov: del.length ? rev / del.length : null, ordersMonth: del.length / months, ohTx, ohFixed, wastePct: cost ? waste / cost : null, drvPer: del.length ? drv / del.length : null, growth, l30: l30.length, repeat, wd };
+  }
+  const pct = (x, d = 1) => (x == null || !isFinite(x) ? "—" : (x * 100).toFixed(d) + "%");
+  function prCompute(I, R) {
+    const ordersBase = num(I.orders) || R.ordersMonth || 0, aov = num(I.aov) || R.aov || 0;
+    const overhead = I.overhead !== "" && I.overhead != null ? num(I.overhead) : Math.max(R.ohTx, R.ohFixed);
+    const varPct = (num(I.knet) + num(I.waste)) / 100, varOrder = num(I.varOrder);
+    const mkt = num(I.mkt) / 100;
+    const scen = (k, oMul, cMul) => {
+      const N = ordersBase * oMul, S = N * aov;
+      const need = S ? (overhead + num(I.target) + N * varOrder) / S + varPct : null; // هامش مطلوب من سعر البيع
+      const be = S ? (overhead + N * varOrder) / S + varPct : null; // نقطة التعادل
+      const gm = num(I.margin) ? num(I.margin) / 100 : R.gm; // الهامش الحالي
+      const gmAfter = gm != null ? 1 - (1 - gm) * (1 + mkt) * cMul : null; // بعد تغير تكلفة السوق
+      const profit = gmAfter != null ? S * (gmAfter - varPct) - N * varOrder - overhead : null;
+      return { k, N, S, need, be, gm: gmAfter, profit, ownerDay: profit != null ? profit / 30 : null };
+    };
+    const g = R.growth != null ? R.growth : 0;
+    return { overhead, ordersBase, aov, varPct, varOrder, S: [scen("😟 متشائم", (1 + g) * 0.8, 1.1), scen("🙂 متوقع", 1 + g, 1), scen("😃 متفائل", (1 + g) * 1.2, 0.95)] };
+  }
+  function pricingPage() {
+    const I = prGet(), R = prData(num(I.days) || 60), C = prCompute(I, R);
+    const inp = (k, lab, hint, step = "0.001") => `<label class="f"><span>${lab}</span><input class="in" data-pr="${k}" type="number" inputmode="decimal" step="${step}" value="${I[k] === "" || I[k] == null ? "" : I[k]}" placeholder="${hint || ""}"></label>`;
+    const fromApp = (v, f = money) => (v == null || !isFinite(v) ? "مفيش بيانات لسه" : "من التطبيق: " + f(v));
+    const noData = R.n < 5;
+    return `<div class="card"><div class="h2">🧮 أداة التسعير والتوقعات</div>
+      <p class="mut" style="font-size:13px">بتحسبلك أقل نسبة ربح تغطي التكاليف والمصاريف، والنسبة اللي توصّلك لربحك كصاحب المؤسسة، وتوقعات الشهر الجاي حسب حركة الزباين وتغيّر أسعار السوق.</p>
+      ${noData ? `<p class="notice">📌 لسه الطلبات المسلّمة قليلة (${R.n})، فالحسبة ماشية على الأرقام اللي هتكتبها. كل ما الطلبات تزيد، الأداة هتاخد أرقامك الحقيقية من التطبيق لوحدها.</p>` : ""}
+      <div class="filters">${[30, 60, 90].map((d) => `<button class="${num(I.days) === d ? "on" : ""}" data-prdays="${d}">آخر ${d} يوم</button>`).join("")}</div></div>
+
+      <div class="card"><div class="h2">📊 أرقامك من التطبيق (آخر ${num(I.days)} يوم)</div>
+        <div class="stats">
+          <div class="stat"><span class="mut">طلبات مسلّمة</span><b>${R.n}</b></div>
+          <div class="stat"><span class="mut">مبيعات الأصناف</span><b>${money(R.rev)}</b></div>
+          <div class="stat"><span class="mut">متوسط الطلب</span><b>${R.aov ? money(R.aov) : "—"}</b></div>
+          <div class="stat"><span class="mut">هامشك الحالي</span><b>${pct(R.gm)}</b></div>
+          <div class="stat"><span class="mut">نمو الطلبات (30 يوم)</span><b>${R.growth == null ? "—" : (R.growth >= 0 ? "▲ " : "▼ ") + pct(Math.abs(R.growth), 0)}</b></div>
+          <div class="stat"><span class="mut">زباين بيرجعوا</span><b>${pct(R.repeat, 0)}</b></div>
+        </div>
+        ${R.revC < R.rev ? `<p class="mut" style="font-size:12px">⚠️ فيه أصناف اتباعت ومالهاش تكلفة متسجلة، فالهامش محسوب على اللي ليه تكلفة بس. سجّل التكلفة من 🐟 المنتجات.</p>` : ""}
+        ${R.n >= 7 ? `<p class="mut" style="font-size:12px">📅 أكتر أيام بيع: ${["الأحد", "الاتنين", "التلات", "الأربع", "الخميس", "الجمعة", "السبت"].map((n, i) => [n, R.wd[i]]).sort((a, b) => b[1] - a[1]).slice(0, 2).map((x) => x[0]).join(" و")} – خلي عروضك القوية فيهم.</p>` : ""}
+      </div>
+
+      <div class="card"><div class="h2">⚙️ الافتراضات (عدّلها براحتك)</div>
+        <div class="row2">${inp("target", "🎯 ربحك المستهدف في الشهر (د.ك)", "900")}${inp("overhead", "🏢 المصاريف الثابتة في الشهر", `${fromApp(Math.max(R.ohTx, R.ohFixed))}`)}</div>
+        <div class="row2">${inp("orders", "🧾 طلبات متوقعة في الشهر", `${fromApp(R.ordersMonth, (v) => Math.round(v))}`, "1")}${inp("aov", "💳 متوسط قيمة الطلب", `${fromApp(R.aov)}`)}</div>
+        <div class="row2">${inp("varOrder", "🛵 تكلفة متغيرة لكل طلب (توصيل، تغليف)", R.drvPer != null ? "المندوب: " + money(R.drvPer) : "")}${inp("margin", "📈 هامشك الحالي % (لو فاضي ياخد من التطبيق)", pct(R.gm), "0.1")}</div>
+        <div class="row2">${inp("knet", "💳 عمولة كي نت %", "", "0.1")}${inp("waste", "🗑️ الهالك % من المبيعات", R.wastePct != null ? "من التطبيق: " + pct(R.wastePct) : "", "0.1")}</div>
+        ${inp("mkt", "🌊 تغيّر أسعار السوق المتوقع % (موجب = البضاعة هتغلى)", "مثلاً 10", "1")}
+        <p class="mut" style="font-size:12px">المصاريف الثابتة من التطبيق = الأكبر بين متوسط مصاريفك ورواتبك الفعلية، ومجموع المصاريف الثابتة والرواتب المسجلة. الأرقام بتتحفظ لما تدوس حفظ.</p>
+        <button class="btn sm tq" data-prsave>💾 حفظ الافتراضات</button>
+      </div>
+      <div id="prOut">${prOut(I, R, C)}</div>
+      <div class="card"><div class="h2">🐟 حاسبة العرض</div>
+        <div class="row2">${inp("ofCost", "تكلفة الكيلو", "6")}${inp("ofPcs", "عدد الحبات", "10", "1")}</div>
+        <div class="row2">${inp("ofW", "أقصى وزن للحبة (كيلو)", "0.35")}${inp("ofExtra", "توصيل/كي نت للطلب", "1")}</div>
+        ${inp("ofProfit", "الربح اللي عايزه في الطلب", "5")}
+        <div id="prOffer">${prOffer(I, C)}</div>
+      </div>`;
+  }
+  function prOut(I, R, C) {
+    const E = C.S[1];
+    const mk = (m) => (m != null && m < 1 ? pct(m / (1 - m)) : "—");
+    const pctN = (x) => (x != null && x >= 0.95 ? "مش واقعي (أكتر من 95%)" : pct(x));
+    const status = E.gm == null || E.need == null ? "" : E.be >= 0.95 ? `<p class="notice" style="background:#fee2e2;color:#991b1b">🚨 مصاريفك الثابتة كبيرة على حجم مبيعاتك الحالي، ورفع السعر لوحده مش هيغطيها. الحل الأساسي إنك تزوّد عدد الطلبات (شوف «طلبات محتاجها» تحت) أو تقلل المصاريف.</p>` : E.gm >= E.need ? `<p class="notice" style="background:#dcfce7;color:#166534">✅ هامشك الحالي ${pct(E.gm)} أعلى من المطلوب ${pct(E.need)} – انت ماشي للهدف.</p>` : E.gm >= E.be ? `<p class="notice" style="background:#fef9c3;color:#854d0e">⚠️ انت مغطّي مصاريفك (التعادل ${pct(E.be)}) بس مش هتوصل للهدف. ${E.need >= 0.95 ? "الهدف ده محتاج طلبات أكتر، مش سعر أعلى بس." : `محتاج تزوّد الهامش ${pct(E.need - E.gm)} أو تزود الطلبات.`}</p>` : `<p class="notice" style="background:#fee2e2;color:#991b1b">🚨 هامشك ${pct(E.gm)} أقل من نقطة التعادل ${pct(E.be)} – كده بتخسر. لازم ترفع الأسعار أو تقلل المصاريف.</p>`;
+    const needOrders = (() => { const gm = E.gm; if (gm == null || !C.aov) return null; const per = C.aov * (gm - C.varPct) - C.varOrder; return per > 0 ? (C.overhead + num(I.target)) / per : null; })();
+    const prods = A.products.filter((p) => p.cost != null && num(p.cost) > 0 && p.active !== false);
+    const m = E.need;
+    return `<div class="card"><div class="h2">🎯 النتيجة</div>${status}
+      <div class="stats">
+        <div class="stat"><span class="mut">هامش التعادل (تغطي المصاريف بس)</span><b>${pctN(E.be)}</b><small class="mut">زيادة على التكلفة ${mk(E.be)}</small></div>
+        <div class="stat"><span class="mut">الهامش اللي يوصّلك لهدفك</span><b style="color:#0e7490">${pctN(E.need)}</b><small class="mut">زيادة على التكلفة ${mk(E.need)}</small></div>
+        <div class="stat"><span class="mut">ربحك المتوقع الشهر الجاي</span><b style="color:${(E.profit || 0) >= 0 ? "#16a34a" : "#dc2626"}">${E.profit == null ? "—" : money(E.profit)}</b><small class="mut">${E.ownerDay == null ? "" : "يعني " + money(E.ownerDay) + " في اليوم"}</small></div>
+        <div class="stat"><span class="mut">طلبات محتاجها في الشهر للهدف</span><b>${needOrders ? Math.ceil(needOrders) : "—"}</b><small class="mut">${needOrders ? "حوالي " + Math.ceil(needOrders / 30) + " في اليوم" : ""}</small></div>
+      </div>
+      <p class="mut" style="font-size:12px">«الهامش» = الربح ÷ سعر البيع. «الزيادة على التكلفة» = اللي بتضيفه على سعر الشراء. مثال: تكلفة 6 وهامش 25% ← السعر 8.</p></div>
+      <div class="card"><div class="h2">🔮 التوقعات للشهر الجاي</div>
+      <p class="mut" style="font-size:12px">مبنية على حركة طلباتك آخر 30 يوم${R.growth != null ? ` (${R.growth >= 0 ? "زيادة" : "نقص"} ${pct(Math.abs(R.growth), 0)})` : ""}، وتغيّر السوق اللي كتبته. المتشائم: طلبات أقل 20% والبضاعة أغلى 10%. المتفائل: طلبات أكتر 20% والبضاعة أرخص 5%.</p>
+      <div class="list">${C.S.map((s) => `<div class="it"><div class="t"><b>${s.k}</b><span class="mut">${Math.round(s.N)} طلب · مبيعات ${money(s.S)} · هامش ${pct(s.gm)}</span><span class="mut" style="font-size:12px">المطلوب للهدف ${pctN(s.need)} · التعادل ${pctN(s.be)}</span></div><b style="color:${(s.profit || 0) >= 0 ? "#16a34a" : "#dc2626"}">${s.profit == null ? "—" : money(s.profit)}</b></div>`).join("")}</div></div>
+      <div class="card"><div class="h2">🏷️ الأسعار المقترحة للأصناف</div>
+      ${!prods.length ? `<p class="mut">سجّل «التكلفة» لكل منتج من 🐟 المنتجات علشان أقترحلك سعره.</p>` : m == null || m >= 0.95 ? `<p class="mut">كمّل الافتراضات فوق علشان أحسب السعر المقترح.</p>` : `<div class="list">${prods.map((p) => { const c = num(p.cost) * (1 + num(I.mkt) / 100), sug = Math.ceil((c / (1 - m)) * 4) / 4, cur = num(p.price), cm = cur ? (cur - c) / cur : null; return `<div class="it"><div class="t"><b>${esc(p.name_ar)}</b><span class="mut">التكلفة ${money(c)} · السعر الحالي ${money(cur)} (هامش ${pct(cm)})</span></div><div style="text-align:left"><b style="color:${cur >= sug ? "#16a34a" : "#b45309"}">${money(sug)}</b>${Math.abs(cur - sug) > 0.001 ? `<br><button class="btn sm ghost" data-prapply="${p.id}" data-prv="${sug}">اعتمد</button>` : ""}</div></div>`; }).join("")}</div><p class="mut" style="font-size:12px">السعر المقترح متقرّب لأقرب ربع دينار، ومحسوب على الهامش اللي يوصّلك لهدفك.</p>`}</div>`;
+  }
+  function prOffer(I, C) {
+    const w = num(I.ofPcs) * num(I.ofW), cost = w * num(I.ofCost) + num(I.ofExtra), price = Math.ceil((cost + num(I.ofProfit)) * 4) / 4;
+    const avgW = num(I.ofPcs) * (num(I.ofW) - 0.025), m = price ? (price - cost) / price : 0;
+    if (!w) return "";
+    return `<div class="line"><span>الوزن (أقصى)</span><b>${fq(w)} كيلو</b></div><div class="line"><span>التكلفة الكاملة</span><b>${money(cost)}</b></div>
+      <div class="line"><span>💰 سعر العرض</span><b style="color:#0e7490;font-size:20px">${money(price)}</b></div>
+      <div class="line"><span>الكيلو على الزبون</span><b>~ ${money(price / (avgW > 0 ? avgW : w))}</b></div>
+      <div class="line"><span>ربحك</span><b style="color:#16a34a">${money(price - cost)} (هامش ${pct(m)})</b></div>
+      ${C.S[1].need != null ? `<p class="mut" style="font-size:12px">${m >= C.S[1].need ? "✅ العرض ده فوق الهامش المطلوب لهدفك." : "ℹ️ هامش العرض أقل من المطلوب لهدفك – كويس كعرض لجذب زباين جداد، بس ماتعتمدش عليه طول الوقت."}</p>` : ""}`;
+  }
+  function prRecalc() {
+    const I = prGet(), R = prData(num(I.days) || 60), C = prCompute(I, R);
+    const o = document.getElementById("prOut"); if (o) o.innerHTML = prOut(I, R, C);
+    const f = document.getElementById("prOffer"); if (f) f.innerHTML = prOffer(I, C);
+  }
+  document.addEventListener("input", (e) => { const k = e.target && e.target.dataset && e.target.dataset.pr; if (!k) return; A.prLocal = { ...(A.prLocal || {}), [k]: e.target.value === "" ? "" : num(e.target.value) }; prRecalc(); });
   // =================== 📥 استيراد Excel (يصحّح الحسابات) + تراجع ===================
   const YN = (v) => (v === true ? "أيوه" : v === false ? "لأ" : "");
   const isYes = (v) => /^(أيوه|ايوه|نعم|yes|true|1|✓)$/i.test(String(v == null ? "" : v).trim());
@@ -1550,7 +1671,7 @@
     const rb = $("resetBtn"); if (rb) rb.onclick = async () => { if (await UI.ask("مسح كل التعديلات والطلبات التجريبية؟")) { await Store.resetDemo(); await refresh(); toast("تم"); } };
   }
   document.addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-impx],[data-impin],[data-imph],[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx],[data-sf],[data-smv],[data-shist],[data-asub],[data-buy],[data-stockpick],[data-newsup],[data-supedit],[data-suppay],[data-supstmt],[data-supbuy],[data-newcust],[data-cpay],[data-csell],[data-cstmt],[data-cedit],[data-cpnew],[data-cpedit],[data-cptog],[data-cpshare],[data-dmove],[data-dmlog],[data-fees],[data-plist],[data-csub],[data-gocollect],[data-msub],[data-addmenu],[data-esub],[data-isub],[data-rk],[data-rxlsx],[data-rprint],[data-gomsub],[data-xlsx],[data-backup],[data-emp],[data-esal],[data-eadv],[data-rec],[data-xfer],[data-boxopen],[data-partners],[data-draw],[data-oinv],[data-cday],[data-dclose],[data-carch],[data-cmeta],[data-dsettle],[data-cexport],[data-printrec],[data-pstmt],[data-osplit],[data-dmdel]"); if (!el || !A.me) return;
+    const el = e.target.closest("[data-prdays],[data-prsave],[data-prapply],[data-impx],[data-impin],[data-imph],[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx],[data-sf],[data-smv],[data-shist],[data-asub],[data-buy],[data-stockpick],[data-newsup],[data-supedit],[data-suppay],[data-supstmt],[data-supbuy],[data-newcust],[data-cpay],[data-csell],[data-cstmt],[data-cedit],[data-cpnew],[data-cpedit],[data-cptog],[data-cpshare],[data-dmove],[data-dmlog],[data-fees],[data-plist],[data-csub],[data-gocollect],[data-msub],[data-addmenu],[data-esub],[data-isub],[data-rk],[data-rxlsx],[data-rprint],[data-gomsub],[data-xlsx],[data-backup],[data-emp],[data-esal],[data-eadv],[data-rec],[data-xfer],[data-boxopen],[data-partners],[data-draw],[data-oinv],[data-cday],[data-dclose],[data-carch],[data-cmeta],[data-dsettle],[data-cexport],[data-printrec],[data-pstmt],[data-osplit],[data-dmdel]"); if (!el || !A.me) return;
     const d = el.dataset;
     try {
       if (d.tab) { A.tab = d.tab; render(); scrollTo(0, 0); }
@@ -1600,6 +1721,9 @@
       else if (d.xlsx !== undefined) exportXlsx(false);
       else if (d.backup !== undefined) exportXlsx(true);
       else if (d.impx !== undefined) exportEditable();
+      else if (d.prdays) { A.prLocal = { ...(A.prLocal || {}), days: +d.prdays }; render(); }
+      else if (d.prsave !== undefined) { const v = { ...prGet() }; try { await Store.saveSettings({ pricing: v }); A.settings.pricing = v; A.prLocal = {}; toast("اتحفظ ✓"); } catch (e) { toast("❌ " + e.message, "err"); } }
+      else if (d.prapply) { const p = A.products.find((x) => x.id === d.prapply); if (!p) return; if (!(await UI.ask(`تغيّر سعر «${p.name_ar}» من ${money(p.price)} لـ ${money(+d.prv)}؟`))) return; try { await Store.saveProduct({ ...p, old_price: p.old_price, price: +d.prv }); toast("✅ السعر اتغير"); await refresh(); } catch (e) { toast("❌ " + e.message, "err"); } }
       else if (d.impin !== undefined) importPick();
       else if (d.imph !== undefined) importHistory();
       else if (d.emp) empSheet(d.emp === "new" ? null : d.emp);
