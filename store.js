@@ -335,6 +335,11 @@
     async employees() { if (LIVE) { const r = await sb.from("employees").select("*").order("created_at"); if (r.error) { console.warn(r.error.message); return []; } return r.data; } return db().employees || []; },
     async saveEmployee(e) { if (LIVE) { const r = { ...e }; if (!r.id) delete r.id; return chk(await sb.from("employees").upsert(r)); } const d = db(); d.employees = d.employees || []; return upsertArr(d.employees, e); },
     async deleteEmployee(id) { if (LIVE) return chk(await sb.from("employees").delete().eq("id", id)); const d = db(); d.employees = (d.employees || []).filter((x) => x.id !== id); persist(); },
+    // 🧠 عقل جوتن
+    async marketPrices() { if (!LIVE) return db().mprices || []; const r = await sb.from("market_prices").select("*").order("seen_on", { ascending: false }).limit(500); if (r.error) { console.warn(r.error.message); return []; } return r.data; },
+    async saveMarketPrice(m) { if (!LIVE) { const d = db(); d.mprices = d.mprices || []; m.id = m.id || String(Date.now()); d.mprices.push(m); persist(); return m; } return chk(await sb.from("market_prices").insert(m)); },
+    async delMarketPrice(id) { if (!LIVE) { const d = db(); d.mprices = (d.mprices || []).filter((x) => x.id !== id); persist(); return; } return chk(await sb.from("market_prices").delete().eq("id", id)); },
+    async igPosts() { if (!LIVE) return []; const r = await sb.from("ig_posts").select("*").order("posted_at", { ascending: false }).limit(300); if (r.error) { console.warn(r.error.message); return []; } return r.data; },
     async recurring() { if (LIVE) { const r = await sb.from("recurring").select("*").order("day"); if (r.error) { console.warn(r.error.message); return []; } return r.data; } return db().recurring || []; },
     async saveRecurring(e) { if (LIVE) { const r = { ...e }; if (!r.id) delete r.id; return chk(await sb.from("recurring").upsert(r)); } const d = db(); d.recurring = d.recurring || []; return upsertArr(d.recurring, e); },
     async deleteRecurring(id) { if (LIVE) return chk(await sb.from("recurring").delete().eq("id", id)); const d = db(); d.recurring = (d.recurring || []).filter((x) => x.id !== id); persist(); },

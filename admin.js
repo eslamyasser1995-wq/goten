@@ -30,6 +30,7 @@
   async function loadAll() {
     const [o, p, c, b, pr, s, ic, tx, mv, sp, cp] = await Promise.all([Store.orders(), Store.products(), Store.categories(), Store.banners(), Store.profiles(), Store.settings(), Store.importedCustomers().catch(() => []), Store.transactions().catch(() => []), Store.stockMoves().catch(() => null), Store.suppliers().catch(() => null), Store.coupons().catch(() => null)]);
     [A.emps, A.recs] = await Promise.all([Store.employees().catch(() => null), Store.recurring().catch(() => null)]);
+    [A.mprices, A.igposts] = await Promise.all([Store.marketPrices().catch(() => []), Store.igPosts().catch(() => [])]);
     [A.dmoves, A.cmeta, A.dcloses, A.alog] = await Promise.all([Store.driverMoves().catch(() => []), Store.custMeta().catch(() => []), Store.dayCloses().catch(() => []), A.me && A.me.role === "admin" ? Store.auditLog().catch(() => []) : Promise.resolve([])]);
     Object.assign(A, { orders: o, products: p, cats: c, banners: b, profiles: pr, settings: s || {}, imported: ic || [], tx: tx || [], moves: mv, sups: sp, cps: cp });
     const ids = new Set(o.map((x) => x.id));
@@ -468,7 +469,7 @@
     const purch = s("purchase"), exp = s("expense"), sal = s("salary") + s("advance"), inc = s("income"), draw = s("drawing");
     return { ords, tx, sales, cogs, waste, purch, exp, sal, inc, draw, profit: sales + inc - purch - exp - sal };
   }
-  const mSubs = [["main", "📒 الحركات"], ["profit", "🐟 ربح الأصناف"], ["month", "📈 الشهور"], ["inc", "💰 الإيرادات"], ["exp", "💸 المصاريف"], ["boxes", "🏦 الخزن"], ["plan", "🎯 الأهداف والميزانية"], ["pricing", "🧮 أداة التسعير"], ["partners", "🤝 الشركاء والسحب"]];
+  const mSubs = [["main", "📒 الحركات"], ["profit", "🐟 ربح الأصناف"], ["month", "📈 الشهور"], ["inc", "💰 الإيرادات"], ["exp", "💸 المصاريف"], ["boxes", "🏦 الخزن"], ["plan", "🎯 الأهداف والميزانية"], ["pricing", "🧮 أداة التسعير"], ["brain", "🧠 عقل جوتن"], ["partners", "🤝 الشركاء والسحب"]];
   const mTabs = () => `<div class="filters" style="margin-top:6px">${mSubs.map(([k, l]) => `<button class="${(A.msub || "main") === k ? "on" : ""}" data-msub="${k}">${l}</button>`).join("")}</div>`;
   const perF = () => `<div class="filters">${PERIODS.map(([k, l]) => `<button class="${A.period === k ? "on" : ""}" data-period="${k}">${l}</button>`).join("")}</div>`;
   function addMenu() {
@@ -517,7 +518,7 @@
   function moneyPage() {
     const v = A.msub || "main";
     const top = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0"><button class="btn sm" style="background:#15803d" data-xlsx>📗 ملف Excel كامل</button><button class="btn sm ghost" data-backup>💾 نسخة احتياطية</button>${A.me.role === "admin" ? `<button class="btn sm ghost" data-impx>📤 ملف للتعديل</button><button class="btn sm" style="background:#7c3aed" data-impin>📥 استيراد Excel</button><button class="btn sm ghost" data-imph>↩️ سجل الاستيراد</button>` : ""}</div>`;
-    return mTabs() + top + (v === "profit" ? profitPage() : v === "month" ? monthPage() : v === "inc" ? incPage() : v === "exp" ? expPage() : v === "pay" || v === "fixed" ? ((A.msub = "exp"), (A.esub = v), expPage()) : v === "boxes" ? boxesPage() : v === "plan" ? planPage() : v === "pricing" ? pricingPage() : v === "partners" ? partnersPage() : accountsMoney());
+    return mTabs() + top + (v === "profit" ? profitPage() : v === "month" ? monthPage() : v === "inc" ? incPage() : v === "exp" ? expPage() : v === "pay" || v === "fixed" ? ((A.msub = "exp"), (A.esub = v), expPage()) : v === "boxes" ? boxesPage() : v === "plan" ? planPage() : v === "pricing" ? pricingPage() : v === "brain" ? brainPage() : v === "partners" ? partnersPage() : accountsMoney());
   }
   // ---- 🐟 ربح كل صنف ----
   function profitPage() {
@@ -869,6 +870,78 @@
     const f = document.getElementById("prOffer"); if (f) f.innerHTML = prOffer(I, C);
   }
   document.addEventListener("input", (e) => { const k = e.target && e.target.dataset && e.target.dataset.pr; if (!k) return; A.prLocal = { ...(A.prLocal || {}), [k]: e.target.value === "" ? "" : num(e.target.value) }; prRecalc(); });
+  // =================== 🧠 عقل جوتن: السوق + إنستجرام + التسعير ===================
+  const FISH = [["زبيدي", /زبيدي/], ["هامور", /هامور|هوامير/], ["بالول", /بالول|بواليل/], ["ميد", /ميد/], ["شعم", /شعم|شعوم/], ["نويبي", /نويبي/], ["سيباس", /سيباس|سبياس/], ["سبيطي", /سبيطي/], ["ربيان", /ربيان|روبيان/], ["بياح", /بياح/], ["نقرور", /نقرور/], ["مزيزي", /مزيزي/], ["عندق", /عندق/], ["جنعد", /جنعد/], ["قبقب", /قبقب/], ["سوبريم", /سوبريم/]];
+  const fishOf = (t) => { const s = String(t || ""); const f = FISH.find(([, re]) => re.test(s)); return f ? f[0] : null; };
+  const fishIn = (t) => FISH.filter(([, re]) => re.test(String(t || ""))).map(([n]) => n);
+  const median = (a) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+  const q4 = (x) => Math.round(x * 4) / 4;
+  function brainPage() {
+    const I = prGet(), R = prData(num(I.days) || 60), C = prCompute(I, R), E = C.S[1];
+    const MP = A.mprices || [], IG = A.igposts || [], costs = I.costs || {};
+    const recent = (d, days) => Date.now() - new Date(d).getTime() <= days * 86400000;
+    const be = E.be != null && E.be < 0.95 ? Math.max(0.05, E.be) : 0.1, goal = E.need != null && E.need < 0.6 ? Math.max(be, E.need) : 0.25;
+    const avgV = IG.length ? IG.reduce((a, p) => a + num(p.views), 0) / IG.length : 0;
+    const types = [...new Set([...MP.map((m) => fishOf(m.item)), ...Object.keys(costs).filter((k) => num(costs[k]) > 0), ...A.products.filter((p) => p.cost != null).map((p) => fishOf(p.name_ar))].filter(Boolean))];
+    const prodCost = (t) => { const p = A.products.find((x) => fishOf(x.name_ar) === t && x.cost != null); return p ? num(p.cost) : null; };
+    const rows = types.map((t) => {
+      const cmpAll = [...new Set(MP.filter((m) => fishOf(m.item) === t && m.kind !== "own").map((m) => m.item.trim()))], cmp = (I.cmp || {})[t] || "";
+      const mk = MP.filter((m) => fishOf(m.item) === t && m.kind !== "own" && recent(m.seen_on, 60) && (!cmp || m.item.trim() === cmp)).map((m) => num(m.price));
+      const own = MP.filter((m) => fishOf(m.item) === t && m.kind === "own").sort((a, b) => String(b.seen_on).localeCompare(String(a.seen_on)))[0];
+      const cost = num(costs[t]) || prodCost(t);
+      const posts = IG.filter((p) => fishIn(p.caption).includes(t)), pv = posts.length ? posts.reduce((a, p) => a + num(p.views), 0) / posts.length : null;
+      const med = median(mk), lo = mk.length ? Math.min(...mk) : null, hi = mk.length ? Math.max(...mk) : null;
+      let bestCust = med != null ? q4(med * 0.95) : null, floor = cost ? q4(cost / (1 - be) + 0.124) : null, goalP = cost ? q4(cost / (1 - goal) + 0.124) : null, rec = null, why = "";
+      if (cost && med != null) {
+        const cap = med * 0.95;
+        if (goalP <= cap) { rec = goalP; why = "بيحقق هدفك وأرخص من السوق"; }
+        else if (floor <= cap) { rec = q4(cap); why = "السوق مش هيستحمل هامش هدفك كامل – فالمقترح هو نفس أفضل سعر للزبون، وانت لسه كسبان"; }
+        else { rec = floor; why = "⚠️ تكلفتك عالية على سعر السوق – أي سعر أقل من كده هتخسر فيه"; }
+      } else if (cost) { rec = goalP; why = "مفيش أسعار سوق مسجلة للنوع ده – السعر محسوب على هدفك بس"; }
+      return { t, cmpAll, cmp, n: mk.length, med, lo, hi, own, cost, bestCust, floor, rec, why, margin: rec && cost ? (rec - cost) / rec : null, posts: posts.length, interest: pv != null && avgV ? pv / avgV : null };
+    }).sort((a, b) => (b.cost ? 1 : 0) - (a.cost ? 1 : 0) || b.posts - a.posts);
+    const lastIG = IG.reduce((a, p) => (p.updated_at > a ? p.updated_at : a), "");
+    const top = [...IG].sort((a, b) => num(b.views) - num(a.views)).slice(0, 5);
+    const withPrice = IG.filter((p) => /[\d٠-٩]/.test(String(p.caption || "").replace(/#\S+/g, "").replace(/[\d٠-٩]+\s*[\/-]\s*[\d٠-٩]+(\s*[\/-]\s*[\d٠-٩]+)?/g, "").replace(/\b\d{4}\b/g, ""))), noPrice = IG.filter((p) => !withPrice.includes(p));
+    const av = (a) => (a.length ? Math.round(a.reduce((s, p) => s + num(p.views), 0) / a.length) : 0);
+    const KIND = { market: "📰 سوق", competitor: "🏪 منافس", own: "📸 أسعارك" };
+    return `<div class="card"><div class="h2">🧠 عقل جوتن</div>
+      <p class="mut" style="font-size:13px">بيجمع أسعار السوق والمنافسين، وأرقام بوستاتك على إنستجرام، وتكلفتك ومصاريفك من أداة التسعير، ويقولك لكل نوع: أفضل سعر يشتري بيه الزبون، وأفضل سعر تبيع بيه بهامش يكسّبك.</p>
+      <p class="mut" style="font-size:12px">🎯 من أداة التسعير: هامش التعادل ${pct(be)} · هامش هدفك ${pct(goal)}${E.need != null && E.need >= 0.6 ? " (هدفك محتاج طلبات أكتر، فحطيت 25% كهامش واقعي)" : ""}</p></div>
+
+      <div class="card"><div class="h2">🏷️ التوصيات لكل نوع</div>
+      ${!rows.length ? `<p class="mut">ضيف أسعار سوق أو تكلفة لأي نوع تحت علشان تظهر التوصيات.</p>` : `<div class="list">${rows.map((r) => `<div class="it" style="display:block"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:16px">🐟 ${r.t}</b>${r.rec ? `<b style="color:#0e7490;font-size:18px">${money(r.rec)}</b>` : ""}</div>
+        <div class="mut" style="font-size:12.5px;line-height:1.9">
+        ${r.cmpAll.length > 1 ? `قارن مع: <select class="in" style="display:inline-block;width:auto;padding:4px 8px;margin:2px 0" data-brcmp="${r.t}"><option value="">كل الأسعار (${r.cmpAll.length})</option>${r.cmpAll.map((c) => `<option ${c === r.cmp ? "selected" : ""}>${esc(c)}</option>`).join("")}</select><br>${!r.cmp && r.hi && r.lo && r.hi / r.lo > 1.3 ? `<span style="color:#b45309">⚠️ الأسعار مختلفة جامد (كويتي ومستورد أو أحجام مختلفة) – اختار الأقرب لبضاعتك</span><br>` : ""}` : ""}
+        ${r.med != null ? `السوق: متوسط ${money(r.med)} (من ${money(r.lo)} لـ ${money(r.hi)} · ${r.n} سعر)` : "السوق: مفيش أسعار مسجلة آخر 60 يوم"}<br>
+        ${r.own ? `آخر سعر نزّلته: ${money(r.own.price)} (${esc(r.own.seen_on)})${r.own.note ? " · " + esc(r.own.note) : ""}<br>` : ""}
+        تكلفتك للكيلو: <input class="in" style="display:inline-block;width:90px;padding:4px 8px;margin:2px 0" type="number" step="0.001" inputmode="decimal" data-brcost="${r.t}" value="${r.cost || ""}" placeholder="اكتبها"><br>
+        ${r.bestCust != null ? `👤 أفضل سعر يشتري بيه الزبون: <b>${money(r.bestCust)}</b> (أقل من السوق 5%)<br>` : ""}
+        ${r.floor ? `🛑 أقل سعر ماتنزلش تحته: <b>${money(r.floor)}</b><br>` : ""}
+        ${r.rec ? `✅ السعر المقترح: <b>${money(r.rec)}</b> · هامش ${pct(r.margin)} · ربح ${money(r.rec - r.cost)} في الكيلو<br><span style="font-size:12px">${r.why}</span><br>` : ""}
+        ${r.interest != null ? `📸 اهتمام إنستجرام: ${r.posts} بوست · ${r.interest >= 1.2 ? "🔥 أعلى من المتوسط" : r.interest >= 0.8 ? "عادي" : "🧊 أقل من المتوسط"} (${Math.round(r.interest * 100)}%)` : ""}
+        </div></div>`).join("")}</div>`}
+      <button class="btn sm tq" data-brsave style="margin-top:8px">💾 حفظ التكاليف</button>
+      <p class="mut" style="font-size:12px">السعر المقترح متقرّب لأقرب ربع دينار. «أقل سعر» = اللي يغطي التكلفة ومصاريفك الثابتة بس، يعني ده الحد الأدنى لأي عرض.</p></div>
+
+      <div class="card"><div class="h2">📸 إنستجرام (آخر 30 يوم)</div>
+      ${!IG.length ? `<p class="mut">لسه مفيش بيانات. اطلب من Claude «حدّث عقل جوتن» وهو يجيب أرقام بوستاتك.</p>` : `
+        <p class="mut" style="font-size:12px">آخر تحديث: ${lastIG ? fmtDate(lastIG) : "—"} · ${IG.length} بوست · متوسط المشاهدات ${Math.round(avgV)}</p>
+        <div class="stats"><div class="stat"><span class="mut">بوستات فيها أسعار</span><b>${av(withPrice)}</b><small class="mut">متوسط مشاهدات (${withPrice.length} بوست)</small></div><div class="stat"><span class="mut">بوستات من غير أسعار</span><b>${av(noPrice)}</b><small class="mut">متوسط مشاهدات (${noPrice.length} بوست)</small></div></div>
+        <div class="h2" style="font-size:15px;margin-top:8px">🏆 أعلى 5 بوستات</div>
+        <div class="list">${top.map((p) => `<a class="it" href="${esc(p.permalink)}" target="_blank" rel="noopener"><div class="t"><b>${esc(String(p.caption || "").slice(0, 70))}</b><span class="mut">${fmtDate(p.posted_at)} · ${p.media_type === "REELS" ? "ريل" : "بوست"}</span></div><b>👁 ${num(p.views).toLocaleString("en")}</b></a>`).join("")}</div>
+        <p class="mut" style="font-size:12px">الأرقام دي مشاهدات ووصول، مش مبيعات. علشان تعرف أنهي بوست جاب طلبات، اكتب كود خصم مختلف في كل بوست وتابعه من 🎟️ الكوبونات.</p>`}</div>
+
+      <div class="card"><div class="h2">📰 أسعار السوق والمنافسين</div>
+        <div class="row2"><label class="f"><span>النوع والحجم</span><input class="in" id="mpI" placeholder="مثلاً زبيدي وسط"></label><label class="f"><span>السعر للكيلو</span><input class="in" id="mpP" type="number" step="0.001" inputmode="decimal"></label></div>
+        <div class="row2"><label class="f"><span>المصدر</span><input class="in" id="mpS" placeholder="حساب منافس، سوق شرق، موقع..."></label><label class="f"><span>النوع</span><select class="in" id="mpK"><option value="competitor">🏪 منافس</option><option value="market">📰 سوق</option><option value="own">📸 أسعاري</option></select></label></div>
+        <div class="row2"><label class="f"><span>التاريخ</span><input class="in" id="mpD" type="date" value="${dayKey(new Date())}"></label><label class="f"><span>لينك (اختياري)</span><input class="in" id="mpU" placeholder="https://"></label></div>
+        <button class="btn sm" data-mpadd>➕ ضيف السعر</button>
+        <div class="list" style="margin-top:10px">${[...MP].sort((a, b) => String(b.seen_on).localeCompare(String(a.seen_on))).map((m) => `<div class="it"><div class="t"><b>${esc(m.item)} · ${money(m.price)}</b><span class="mut" style="font-size:12px">${KIND[m.kind] || ""} · ${m.url ? `<a href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.source || "مصدر")}</a>` : esc(m.source || "")} · ${esc(m.seen_on)}${m.note ? " · " + esc(m.note) : ""}</span></div><button class="btn sm ghost" data-mpdel="${m.id}">🗑️</button></div>`).join("") || '<p class="mut">مفيش أسعار لسه.</p>'}</div>
+        <p class="mut" style="font-size:12px">التوصيات بتستخدم أسعار السوق والمنافسين بتاعة آخر 60 يوم بس. كل ما تضيف أسعار أكتر وأحدث، التوصية بتبقى أدق.</p></div>`;
+  }
+  document.addEventListener("change", (e) => { const t = e.target && e.target.dataset && e.target.dataset.brcmp; if (!t) return; const c = { ...(prGet().cmp || {}) }; c[t] = e.target.value; A.prLocal = { ...(A.prLocal || {}), cmp: c }; render(); });
+  document.addEventListener("input", (e) => { const t = e.target && e.target.dataset && e.target.dataset.brcost; if (!t) return; const c = { ...(prGet().costs || {}) }; c[t] = e.target.value === "" ? "" : num(e.target.value); A.prLocal = { ...(A.prLocal || {}), costs: c }; });
   // =================== 📥 استيراد Excel (يصحّح الحسابات) + تراجع ===================
   const YN = (v) => (v === true ? "أيوه" : v === false ? "لأ" : "");
   const isYes = (v) => /^(أيوه|ايوه|نعم|yes|true|1|✓)$/i.test(String(v == null ? "" : v).trim());
@@ -1671,7 +1744,7 @@
     const rb = $("resetBtn"); if (rb) rb.onclick = async () => { if (await UI.ask("مسح كل التعديلات والطلبات التجريبية؟")) { await Store.resetDemo(); await refresh(); toast("تم"); } };
   }
   document.addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-prdays],[data-prsave],[data-prapply],[data-impx],[data-impin],[data-imph],[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx],[data-sf],[data-smv],[data-shist],[data-asub],[data-buy],[data-stockpick],[data-newsup],[data-supedit],[data-suppay],[data-supstmt],[data-supbuy],[data-newcust],[data-cpay],[data-csell],[data-cstmt],[data-cedit],[data-cpnew],[data-cpedit],[data-cptog],[data-cpshare],[data-dmove],[data-dmlog],[data-fees],[data-plist],[data-csub],[data-gocollect],[data-msub],[data-addmenu],[data-esub],[data-isub],[data-rk],[data-rxlsx],[data-rprint],[data-gomsub],[data-xlsx],[data-backup],[data-emp],[data-esal],[data-eadv],[data-rec],[data-xfer],[data-boxopen],[data-partners],[data-draw],[data-oinv],[data-cday],[data-dclose],[data-carch],[data-cmeta],[data-dsettle],[data-cexport],[data-printrec],[data-pstmt],[data-osplit],[data-dmdel]"); if (!el || !A.me) return;
+    const el = e.target.closest("[data-brsave],[data-mpadd],[data-mpdel],[data-prdays],[data-prsave],[data-prapply],[data-impx],[data-impin],[data-imph],[data-tab],[data-of],[data-newprod],[data-editprod],[data-editcat],[data-editban],[data-bulk],[data-bulksave],[data-quick],[data-storeopen],[data-adddrv],[data-editheader],[data-bcast],[data-vcf],[data-copynums],[data-pushall],[data-import],[data-delcust],[data-delorder],[data-delallorders],[data-period],[data-addtx],[data-export],[data-settle],[data-rpaid],[data-deltx],[data-sf],[data-smv],[data-shist],[data-asub],[data-buy],[data-stockpick],[data-newsup],[data-supedit],[data-suppay],[data-supstmt],[data-supbuy],[data-newcust],[data-cpay],[data-csell],[data-cstmt],[data-cedit],[data-cpnew],[data-cpedit],[data-cptog],[data-cpshare],[data-dmove],[data-dmlog],[data-fees],[data-plist],[data-csub],[data-gocollect],[data-msub],[data-addmenu],[data-esub],[data-isub],[data-rk],[data-rxlsx],[data-rprint],[data-gomsub],[data-xlsx],[data-backup],[data-emp],[data-esal],[data-eadv],[data-rec],[data-xfer],[data-boxopen],[data-partners],[data-draw],[data-oinv],[data-cday],[data-dclose],[data-carch],[data-cmeta],[data-dsettle],[data-cexport],[data-printrec],[data-pstmt],[data-osplit],[data-dmdel]"); if (!el || !A.me) return;
     const d = el.dataset;
     try {
       if (d.tab) { A.tab = d.tab; render(); scrollTo(0, 0); }
@@ -1721,6 +1794,9 @@
       else if (d.xlsx !== undefined) exportXlsx(false);
       else if (d.backup !== undefined) exportXlsx(true);
       else if (d.impx !== undefined) exportEditable();
+      else if (d.brsave !== undefined) { const v = { ...prGet() }; try { await Store.saveSettings({ pricing: v }); A.settings.pricing = v; A.prLocal = {}; toast("اتحفظ ✓"); render(); } catch (e) { toast("❌ " + e.message, "err"); } }
+      else if (d.mpadd !== undefined) { const r = { item: $("mpI").value.trim(), price: num($("mpP").value), source: $("mpS").value.trim() || null, kind: $("mpK").value, seen_on: $("mpD").value || dayKey(new Date()), url: $("mpU").value.trim() || null }; if (!r.item || !(r.price > 0)) return toast("اكتب النوع والسعر", "err"); try { await Store.saveMarketPrice(r); A.mprices = await Store.marketPrices(); toast("اتضاف ✓"); render(); } catch (e) { toast("❌ " + e.message, "err"); } }
+      else if (d.mpdel) { if (!(await UI.ask("تمسح السعر ده؟"))) return; try { await Store.delMarketPrice(d.mpdel); A.mprices = await Store.marketPrices(); render(); } catch (e) { toast("❌ " + e.message, "err"); } }
       else if (d.prdays) { A.prLocal = { ...(A.prLocal || {}), days: +d.prdays }; render(); }
       else if (d.prsave !== undefined) { const v = { ...prGet() }; try { await Store.saveSettings({ pricing: v }); A.settings.pricing = v; A.prLocal = {}; toast("اتحفظ ✓"); } catch (e) { toast("❌ " + e.message, "err"); } }
       else if (d.prapply) { const p = A.products.find((x) => x.id === d.prapply); if (!p) return; if (!(await UI.ask(`تغيّر سعر «${p.name_ar}» من ${money(p.price)} لـ ${money(+d.prv)}؟`))) return; try { await Store.saveProduct({ ...p, old_price: p.old_price, price: +d.prv }); toast("✅ السعر اتغير"); await refresh(); } catch (e) { toast("❌ " + e.message, "err"); } }
